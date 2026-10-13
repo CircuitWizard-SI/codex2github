@@ -1,0 +1,36 @@
+name: Tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ['3.11', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install project
+        run: python -m pip install -e .
+      - name: Run synthetic-data tests
+        run: python -m unittest discover -s tests -v
+      - name: Check command entry point
+        run: python -m codex2github --help
+      - name: Check source and complete commit history
+        run: python scripts/audit_public.py --history
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade "setuptools>=77" wheel
+          python -m pip wheel --no-deps --no-build-isolation -w dist .
+      - name: Check distributable package contents
+        shell: bash
+        run: python scripts/audit_public.py dist/*.whl

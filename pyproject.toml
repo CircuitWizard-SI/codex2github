@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex2github"
+version = "0.1.0"
+description = "Use GitHub Issues to continue, steer, and queue local Codex conversations"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "CircuitWizard-SI" }]
+dependencies = ["zstandard==0.25.0"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development",
+]
+
+[project.scripts]
+codex2github = "codex2github.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/CircuitWizard-SI/codex2github-source"
+Issues = "https://github.com/CircuitWizard-SI/codex2github-source/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+codex2github = ["*.mjs"]

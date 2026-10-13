@@ -1,0 +1,9 @@
+{
+  "repo": "OWNER/PRIVATE_TASK_REPO",
+  "model": "auto",
+  "workspace": "workspace",
+  "runtime_dir": ".runtime",
+  "poll_seconds": 15,
+  "sync_seconds": 30,
+  "recovery_seconds": 900
+}

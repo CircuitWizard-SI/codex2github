@@ -2,7 +2,13 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.4`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.1.5`。
+
+## [0.1.5](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.5)
+
+- 新会话取得会话 ID 后自动在原 Issue 附上“查看完整会话记录”入口，正在执行时即可关联；已有新会话会自动补齐。
+- 保留用户原有正文及评论，幂等更新专用链接区块；显示首次同步等待提示，链接更新失败不阻断任务。
+- Add full-history links when new chats bind, repair previously created chats, and preserve task text and comments.
 
 ## [0.1.4](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.4)
 

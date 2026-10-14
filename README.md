@@ -2,7 +2,7 @@
 
 [简体中文](#zh-cn) · [English](#en)
 
-当前版本 / Current release: [0.1.4](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.4) · `codex2github --version`
+当前版本 / Current release: [0.1.5](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.5) · `codex2github --version`
 
 [![Tests](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -82,7 +82,7 @@ gh repo create YOUR_USER/codex-tasks --private
 
 `setup` 会打印私有仓库的会话入口 URL。打开该 Issue，在评论框发送 `/session 会话名或ID`，收到连接确认后直接留言。新建 Issue 也可以启动新任务，无需添加标签。
 
-在入口页点击“➕ 新建会话”，或直接在自己的私有任务仓库新建 Issue，即可从手机创建新会话。带 `codex-session` 标签的未绑定 Issue 同样支持新任务；可以先用 `/models`、`/model`、`/effort` 选择模型和档位，再留言实际任务。只有目录入口本身需要先连接已有会话。
+在入口页点击“➕ 新建会话”，或直接在自己的私有任务仓库新建 Issue，即可从手机创建新会话。带 `codex-session` 标签的未绑定 Issue 同样支持新任务；可以先用 `/models`、`/model`、`/effort` 选择模型和档位，再留言实际任务。只有目录入口本身需要先连接已有会话。新会话取得会话 ID 后，Issue 正文自动附上“查看完整会话记录”链接，无需等任务完成；首次历史同步完成后链接即可打开。原有正文和评论会保留。
 
 保持电脑在线和监听器运行。GitHub 留言约每 15 秒读取；本机变化由文件事件触发，历史发布最短间隔 30 秒，15 分钟兜底检查。关闭前台监听器可按 `Ctrl+C`，已启动的任务继续执行。
 
@@ -229,7 +229,7 @@ Replace `YOUR_USER` with your GitHub username. The default model follows your cu
 
 `setup` prints the chat hub URL in your private repository. Open that Issue and comment `/session CHAT_NAME_OR_ID`; once the binding is confirmed, send ordinary comments to continue the chat. Create a new Issue with your task to start a new chat directly from your phone. No label or pre-created Desktop chat is required.
 
-Use the hub's **➕ New chat** link or create an Issue in your private task repository. An unbound Issue supports new tasks even with the `codex-session` label. You may select the model and reasoning effort with `/models`, `/model`, and `/effort` before sending the task. The directory hub itself remains an entry for explicitly binding existing chats.
+Use the hub's **➕ New chat** link or create an Issue in your private task repository. An unbound Issue supports new tasks even with the `codex-session` label. You may select the model and reasoning effort with `/models`, `/model`, and `/effort` before sending the task. The directory hub itself remains an entry for explicitly binding existing chats. As soon as a new chat has a session ID, its Issue body gains a full conversation history link, without waiting for task completion. The link becomes available after the first history sync; existing task text and comments are preserved.
 
 Keep your computer online and the listener running. GitHub comments are polled about every 15 seconds. Local file events trigger history updates with a minimum publication interval of 30 seconds and a recovery check every 15 minutes. Press `Ctrl+C` to stop the foreground listener; tasks already started continue running.
 

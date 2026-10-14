@@ -492,6 +492,96 @@ class RouterTests(unittest.TestCase):
         self.assertFalse((directory / "completion.json").exists())
         self.assertIn("issues/10", self.router.render_hub())
 
+    def test_active_new_chat_gets_history_link_on_tick_before_completion(self):
+        directory = self.root / "new-history-job"
+        directory.mkdir()
+        (directory / "result.md").write_text("session id: " + self.other, encoding="utf-8")
+        self.router.state["issues"]["10"] = {"queue": [], "new_task": True, "body_done": True,
+                                              "count": 0, "cursor": 42}
+        self.router.state["jobs"]["10"] = {"sid": None, "directory": str(directory)}
+        original = "原始任务\n保留正文和空格  "
+        issue = {"number": 10, "title": "新任务", "body": original, "labels": [],
+                 "state": "open", "comments": 0, "user": {"login": "example-user"}}
+        def api(endpoint, method="GET", body=None):
+            if endpoint == router.PREFIX:
+                return {"private": True, "owner": {"login": "example-user"}}
+            self.assertEqual(endpoint, router.PREFIX + "/issues/10")
+            if method == "GET":
+                # A user's edit after the issue list was fetched must survive.
+                return {**issue, "body": original + "\n最新补充"}
+            self.assertEqual(method, "PATCH")
+            self.assertEqual(set(body), {"body"})
+            issue.update(body)
+            return issue
+        with patch.object(router, "api", side_effect=api) as remote, patch.object(router, "page_list", return_value=[issue]), patch.object(self.router, "reap"):
+            self.router.tick()
+            calls = remote.call_count
+            self.router.tick()
+            self.assertEqual(remote.call_count, calls + 1)  # Metadata only on idle tick.
+        self.assertTrue(issue["body"].startswith(original + "\n最新补充\n\n"))
+        self.assertIn("查看完整会话记录", issue["body"])
+        self.assertIn(f"/sessions/{self.other}/page-001.md", issue["body"])
+        self.assertIn("首次同步完成后", issue["body"])
+        self.assertFalse((directory / "completion.json").exists())
+        self.assertEqual(self.router.state["issues"]["10"]["queue"], [])
+        self.assertEqual(self.replies, [])
+
+    def test_completed_new_chat_history_is_repaired_and_rebinding_updates_only_panel(self):
+        self.router.state["issues"]["10"] = {"sid": self.sid, "new_task": True, "body_done": True}
+        issue = {"number": 10, "body": "任务原文  \n"}
+        with patch.object(router, "api", side_effect=lambda *args: dict(issue)) as remote:
+            self.router.ensure_history_link(issue)
+            self.assertEqual(remote.call_count, 2)
+            first = issue["body"]
+            remote.reset_mock()
+            self.router.ensure_history_link(issue)
+            remote.assert_not_called()
+            self.router.state["issues"]["10"]["sid"] = self.other
+            self.router.ensure_history_link(issue)
+        self.assertTrue(issue["body"].startswith("任务原文  \n\n\n"))
+        self.assertEqual(issue["body"].count("<!-- codex2github:history:start -->"), 1)
+        self.assertIn(self.other, issue["body"])
+        self.assertNotIn(self.sid, issue["body"])
+        self.assertNotEqual(first, issue["body"])
+
+    def test_history_decoration_never_becomes_a_task_during_binding_recovery(self):
+        self.router.state["issues"]["10"] = {"sid": self.sid, "new_task": True, "body_done": True}
+        issue = {"number": 10, "title": "新任务", "body": "已经执行过的任务", "labels": [],
+                 "state": "open", "comments": 0, "user": {"login": "example-user"}}
+        with patch.object(router, "api", return_value=dict(issue)):
+            self.router.ensure_history_link(issue)
+        del self.router.state["issues"]["10"]
+        with patch.object(router, "api", return_value={"private": True, "owner": {"login": "example-user"}}), patch.object(router, "page_list", side_effect=lambda endpoint: [] if endpoint.endswith("/comments") else [issue]), patch.object(self.router, "reap"), patch.object(self.router, "handle") as handle:
+            self.router.tick()
+        handle.assert_not_called()
+        self.assertEqual(self.router.state["issues"]["10"]["sid"], self.sid)
+        self.assertEqual(self.router.state["issues"]["10"]["queue"], [])
+
+    def test_history_attachment_skips_hub_old_rooms_and_unconsumed_tasks(self):
+        with patch.object(router, "api") as remote:
+            self.router.ensure_history_link({"number": 8})
+            self.router.state["issues"]["10"] = {"new_task": True, "body_done": True}
+            self.router.ensure_history_link({"number": 10})
+            self.router.state["issues"]["10"].update(sid=self.other, body_done=False)
+            self.router.ensure_history_link({"number": 10})
+            self.router.state["issues"]["10"]["body_done"] = True
+            self.router.state["hub"] = 10
+            self.router.ensure_history_link({"number": 10})
+            remote.assert_not_called()
+
+    def test_history_api_failure_does_not_block_following_task_launch(self):
+        self.router.state["issues"]["10"] = {"sid": self.other, "new_task": True,
+                                              "body_done": True, "count": 0, "queue": []}
+        self.router.state["issues"]["8"]["queue"] = [{"sid": self.sid, "text": "继续工作"}]
+        issue = {"number": 10, "title": "新任务", "body": None, "labels": [], "comments": 0}
+        def api(endpoint, *args):
+            if endpoint == router.PREFIX:
+                return {"private": True, "owner": {"login": "example-user"}}
+            raise RuntimeError("Temporary GitHub failure")
+        with patch.object(router, "api", side_effect=api), patch.object(router, "page_list", return_value=[issue]), patch.object(self.router, "reap"), patch.object(self.router, "busy", return_value=False), patch.object(self.router, "launch") as launch:
+            self.router.tick()
+        launch.assert_called_once_with(8, {"sid": self.sid, "text": "继续工作"})
+
     def test_metadata_revision_refreshes_index_but_idle_and_history_do_not(self):
         with patch.object(router, "threads", return_value=self.records) as query:
             self.router.load_records()

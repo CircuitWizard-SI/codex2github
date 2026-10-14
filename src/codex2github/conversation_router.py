@@ -390,6 +390,35 @@ class Router:
         self.save()
         return number
 
+    def ensure_history_link(self, issue: dict):
+        """Decorate a consumed new-task body without changing its task text."""
+        number = issue["number"]
+        info = self.state["issues"].get(str(number), {})
+        sid = info.get("sid")
+        if (not sid or not info.get("new_task") or not info.get("body_done")
+                or number == self.state.get("hub")):
+            return
+        start = "<!-- codex2github:history:start -->"
+        end = "<!-- codex2github:history:end -->"
+        history = f"https://github.com/{REPO}/blob/main/sessions/{sid}/page-001.md"
+        panel = (f"{start}\n<!-- codex2github:bind {sid} -->\n"
+                 f"**[查看完整会话记录]({history})**\n\n"
+                 "首次同步完成后链接可用；后续对话会自动更新到记录中。\n"
+                 f"{end}")
+        if panel in (issue.get("body") or ""):
+            return
+        # Read again immediately before editing to retain intervening user edits.
+        current = api(f"{PREFIX}/issues/{number}")
+        body = current.get("body") or ""
+        pattern = re.escape(start) + r"[\s\S]*?" + re.escape(end)
+        if re.search(pattern, body):
+            updated = re.sub(pattern, lambda match: panel, body, count=1)
+        else:
+            updated = body + ("\n\n" if body else "") + panel
+        if updated != body:
+            api(f"{PREFIX}/issues/{number}", "PATCH", {"body": updated})
+        issue["body"] = updated
+
     def setup(self):
         metadata = api(PREFIX)
         if not is_private_task_repository(metadata):
@@ -958,6 +987,11 @@ class Router:
                     self.save()
                 info["count"] = issue["comments"]
                 self.save()
+            try:
+                self.ensure_history_link(issue)
+            except Exception as error:
+                # Presentation failures must not block task delivery or completion.
+                print(f"History link #{number} will retry: {redact(str(error))[:300]}", flush=True)
         # All comments are consumed in order, including model/session commands
         # while a generation is busy. Each queued message captures its target/model.
         for number, info in self.state["issues"].items():

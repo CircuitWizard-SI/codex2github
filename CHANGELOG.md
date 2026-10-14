@@ -2,7 +2,13 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.5`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.1.6`。
+
+## [0.1.6](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.6)
+
+- 移除独立 worker 的 30 分钟任务总时长限制，不再因运行时间主动中止 Codex；持续等待真实完成、失败或进程退出。
+- 保留连接及单次 RPC 超时，避免失去响应时无限阻塞；不改变客户端身份、缓存相关调用路径、模型或任务输入。
+- Remove the 30-minute task deadline. Long-running turns wait for actual completion or failure; connection timeouts remain bounded.
 
 ## [0.1.5](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.5)
 

@@ -10,7 +10,6 @@ import shutil
 import subprocess
 import sys
 import threading
-import time
 import re
 
 from .session_sync import BASE, write_if_changed
@@ -223,7 +222,7 @@ def read_route(client: AppServer, cwd: str) -> dict:
 
 
 def run_turn(client: AppServer, directory: Path, prompt: str, model: str, cwd: str,
-             sid: str = "", effort: str = "", timeout: float = 1800, ephemeral: bool = False) -> dict:
+             sid: str = "", effort: str = "", ephemeral: bool = False) -> dict:
     client.initialize()
     actual_effort = normalize_effort(effort) if effort else "auto"
     requested = model if model and model != "auto" else ""
@@ -282,14 +281,11 @@ def run_turn(client: AppServer, directory: Path, prompt: str, model: str, cwd: s
         turn = client.call("turn/start", retry_request)["turn"]
     turn_id = turn["id"]
     json_file(directory / "runtime.json", {"sid": sid, "turn_id": turn_id, "active": True, "transport": "appserver"})
-    deadline = time.monotonic() + timeout
     messages, status, error = {}, "inProgress", ""
+    # Task duration is controlled by Codex and the user, never a bridge deadline.
+    # Short transport waits below still detect process exit and handle steering.
     while status == "inProgress":
         process_controls(client, directory, sid, turn_id)
-        if time.monotonic() >= deadline:
-            client.call("turn/interrupt", {"threadId": sid, "turnId": turn_id})
-            status, error = "failed", "任务超过 30 分钟，已中止；Issue 保持打开"
-            break
         try:
             event = client.notifications.get(timeout=.25)
         except queue.Empty:

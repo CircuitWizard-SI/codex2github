@@ -69,6 +69,32 @@ class WorkerTests(unittest.TestCase):
                          "input": [{"type": "text", "text": "原始任务", "text_elements": []}], "effort": "medium"}))
         self.assertEqual((result["model"], result["effort"]), ("route-default", "medium"))
 
+    def test_long_running_turn_waits_for_actual_terminal_event_without_interrupting(self):
+        for status in ("completed", "failed"):
+            with self.subTest(status=status):
+                clock = [0]
+                rpc = Mock()
+                rpc.process.poll.return_value = None
+                rpc.call.side_effect = lambda method, params: (
+                    {"thread": {"id": "session"}} if method == "thread/resume"
+                    else {"turn": {"id": "turn"}})
+                def next_event(timeout):
+                    if clock[0] == 0:
+                        clock[0] = 7200  # Two hours pass while the server stays alive.
+                        raise queue.Empty
+                    return {"method": "turn/completed", "params": {"threadId": "session", "turn": {
+                        "id": "turn", "status": status,
+                        "error": {"message": "actual server failure"} if status == "failed" else None,
+                        "items": [{"type": "agentMessage", "id": "answer", "phase": "final", "text": "long task finished"}]
+                                 if status == "completed" else []}}}
+                rpc.notifications.get.side_effect = next_event
+                with patch("time.monotonic", side_effect=lambda: clock[0]):
+                    result = worker.run_turn(rpc, self.root, "unchanged task", "configured-model", str(self.root), "session")
+                self.assertEqual(result["ok"], status == "completed")
+                self.assertEqual(result["final"], "long task finished" if status == "completed"
+                                 else "Codex 执行未完成：actual server failure")
+                self.assertNotIn("turn/interrupt", [call.args[0] for call in rpc.call.call_args_list])
+
     def control(self, sid="session", turn="turn", comment=1):
         data = {"sid": sid, "turn_id": turn, "comment": comment, "message_id": f"message-{comment}", "text": "补充引导"}
         worker.json_file(self.root / "control-inbox" / f"{comment}.json", data)
@@ -130,7 +156,7 @@ for line in sys.stdin:
         self.control()
         rpc = worker.AppServer(self.root, [sys.executable, "-u", str(fixture)])
         try:
-            result = worker.run_turn(rpc, self.root, "task", "configured-model", str(self.root), sid="session", effort="xhigh", timeout=10)
+            result = worker.run_turn(rpc, self.root, "task", "configured-model", str(self.root), sid="session", effort="xhigh")
         finally:
             rpc.close()
         self.assertTrue(result["ok"])

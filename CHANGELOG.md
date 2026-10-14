@@ -2,7 +2,12 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.2`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.1.3`。
+
+## [0.1.3](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.3)
+
+- README 改为完整简体中文／English 双语，提供语言导航，覆盖部署、指令、通知、隐私边界、限制和开发说明。
+- 保持任务执行与实例配置行为不变。
 
 ## [0.1.2](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.2)
 

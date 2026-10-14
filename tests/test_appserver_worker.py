@@ -36,7 +36,7 @@ class WorkerTests(unittest.TestCase):
                 process.stdin = Mock()
                 process.stdout = MagicMock()
                 process.poll.return_value = None
-                client = worker.AppServer(self.root)
+                client = worker.AppServer(self.root, [sys.executable, "-c", ""])
             self.assertEqual(worker.codex_environment()["TERM"], "unknown")
             self.assertEqual(worker.codex_environment()["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"], "Codex Desktop")
             self.assertEqual(client.client_info, {"name": "Codex Desktop", "version": "26.1007.21434"})

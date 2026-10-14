@@ -21,6 +21,7 @@ def main(argv=None) -> int:
     init.add_argument("--repo", required=True)
     init.add_argument("--model", default="auto", help="Initial per-conversation model override; auto follows the current route")
     init.add_argument("--workspace", default="workspace")
+    init.add_argument("--user-agent-profile", choices=["default", "desktop"], default="default")
     init.add_argument("--force", action="store_true")
     commands.add_parser("doctor", help="Read-only configuration and prerequisite checks")
     commands.add_parser("setup", help="Create a conversation hub in the configured private repository")
@@ -49,7 +50,8 @@ def main(argv=None) -> int:
                 raise ValueError("Configuration already exists; use a different --config or --force")
             model = args.model or "auto"
             data = {"repo": args.repo, "model": model, "workspace": args.workspace, "runtime_dir": ".runtime",
-                    "poll_seconds": 15, "sync_seconds": 30, "recovery_seconds": 900}
+                    "poll_seconds": 15, "sync_seconds": 30, "recovery_seconds": 900,
+                    "user_agent_profile": args.user_agent_profile}
             # Validate before writing, including on init of a new file.
             import re
             if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):

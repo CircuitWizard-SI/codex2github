@@ -17,6 +17,7 @@ from .config import SETTINGS
 from .queue_results import submission_snapshot
 from .reasoning import normalize as normalize_effort, default_effort
 from .thread_settings import apply_existing_thread, SettingsUnavailable
+from .request_identity import client_info, codex_environment, verify_user_agent
 
 
 class RpcError(RuntimeError):
@@ -63,8 +64,8 @@ def codex_command() -> list[str]:
 
 class AppServer:
     def __init__(self, directory: Path, command: list[str] | None = None):
-        environment = os.environ.copy()
-        environment["CODEX_HOME"] = str(SETTINGS.codex_home)
+        self.client_info = client_info()
+        environment = codex_environment()
         self.errors = (directory / "appserver-error.log").open("w", encoding="utf-8")
         self.process = subprocess.Popen(command or codex_command() + ["app-server", "--stdio"],
                                         env=environment,
@@ -127,8 +128,10 @@ class AppServer:
                 self.pending.pop(request_id, None)
 
     def initialize(self):
-        self.call("initialize", {"clientInfo": {"name": "codex2github", "version": "7"},
-                                 "capabilities": {"experimentalApi": True}})
+        result = self.call("initialize", {"clientInfo": self.client_info,
+                                          "capabilities": {"experimentalApi": True}})
+        self.user_agent = result.get("userAgent", "")
+        verify_user_agent(self.user_agent, self.client_info)
         self.send({"method": "initialized", "params": {}})
 
     def close(self):
@@ -187,8 +190,7 @@ def queue_existing_thread(prompt: str, model: str, cwd: str, sid: str, timeout: 
     arguments = codex_command() + ["queue", "--thread", sid, "--message", prompt]
     if cwd and Path(cwd).is_dir():
         arguments += ["--cd", cwd]
-    environment = os.environ.copy()
-    environment["CODEX_HOME"] = str(SETTINGS.codex_home)
+    environment = codex_environment()
     boundary = submission_snapshot(SETTINGS.codex_home, sid)
     try:
         completed = subprocess.run(arguments, cwd=cwd if cwd and Path(cwd).is_dir() else None,

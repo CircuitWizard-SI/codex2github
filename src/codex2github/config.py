@@ -118,6 +118,7 @@ class Settings:
     poll_seconds: int = 15
     sync_seconds: int = 30
     recovery_seconds: int = 900
+    user_agent_profile: str = "default"
 
     def require_configured(self):
         if not self.path.is_file():
@@ -128,6 +129,8 @@ class Settings:
             raise ValueError("model must be auto or a valid per-conversation model ID")
         if min(self.poll_seconds, self.sync_seconds, self.recovery_seconds) < 1:
             raise ValueError("Polling and recovery intervals must be positive")
+        if self.user_agent_profile not in {"default", "desktop"}:
+            raise ValueError("user_agent_profile must be default or desktop")
 
 
 def load_settings(path: Path | None = None) -> Settings:
@@ -144,7 +147,8 @@ def load_settings(path: Path | None = None) -> Settings:
                     runtime_dir=resolve_path(data.get("runtime_dir", ".runtime"), root),
                     poll_seconds=int(data.get("poll_seconds", 15)),
                     sync_seconds=int(data.get("sync_seconds", 30)),
-                    recovery_seconds=int(data.get("recovery_seconds", 900)))
+                    recovery_seconds=int(data.get("recovery_seconds", 900)),
+                    user_agent_profile=data.get("user_agent_profile", "default"))
 
 
 SETTINGS = load_settings()

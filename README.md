@@ -2,7 +2,7 @@
 
 [简体中文](#zh-cn) · [English](#en)
 
-当前版本 / Current release: [0.1.6](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.6) · `codex2github --version`
+当前版本 / Current release: [0.1.7](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.7) · `codex2github --version`
 
 [![Tests](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -84,7 +84,7 @@ gh repo create YOUR_USER/codex-tasks --private
 
 在入口页点击“➕ 新建会话”，或直接在自己的私有任务仓库新建 Issue，即可从手机创建新会话。带 `codex-session` 标签的未绑定 Issue 同样支持新任务；可以先用 `/models`、`/model`、`/effort` 选择模型和档位，再留言实际任务。只有目录入口本身需要先连接已有会话。新会话取得会话 ID 后，Issue 正文自动附上“查看完整会话记录”链接，无需等任务完成；首次历史同步完成后链接即可打开。原有正文和评论会保留。
 
-保持电脑在线和监听器运行。GitHub 留言约每 15 秒读取；本机变化由文件事件触发，历史发布最短间隔 30 秒，15 分钟兜底检查。关闭前台监听器可按 `Ctrl+C`，已启动的任务继续执行。 项目不设任务总时长上限：运行超过 30 分钟仍持续等待 Codex 的真实完成或失败结果。
+保持电脑在线和监听器运行。GitHub 留言约每 15 秒读取；本机变化由文件事件触发，历史发布最短间隔 30 秒，15 分钟兜底检查。关闭前台监听器可按 `Ctrl+C`，已启动的任务继续执行。 项目不设任务总时长上限：运行超过 30 分钟仍持续等待 Codex 的真实完成或失败结果。 请求身份默认可配置为 Codex Desktop/unknown；该设置只作用于桥接子进程。
 
 后台启动可使用 `scripts/start.ps1`。此项目不自动安装系统服务或开机启动项。
 
@@ -231,7 +231,7 @@ Replace `YOUR_USER` with your GitHub username. The default model follows your cu
 
 Use the hub's **➕ New chat** link or create an Issue in your private task repository. An unbound Issue supports new tasks even with the `codex-session` label. You may select the model and reasoning effort with `/models`, `/model`, and `/effort` before sending the task. The directory hub itself remains an entry for explicitly binding existing chats. As soon as a new chat has a session ID, its Issue body gains a full conversation history link, without waiting for task completion. The link becomes available after the first history sync; existing task text and comments are preserved.
 
-Keep your computer online and the listener running. GitHub comments are polled about every 15 seconds. Local file events trigger history updates with a minimum publication interval of 30 seconds and a recovery check every 15 minutes. Press `Ctrl+C` to stop the foreground listener; tasks already started continue running. The bridge imposes no total task duration limit: it keeps waiting for the actual Codex result even after 30 minutes.
+Keep your computer online and the listener running. GitHub comments are polled about every 15 seconds. Local file events trigger history updates with a minimum publication interval of 30 seconds and a recovery check every 15 minutes. Press `Ctrl+C` to stop the foreground listener; tasks already started continue running. The bridge imposes no total task duration limit: it keeps waiting for the actual Codex result even after 30 minutes. The request identity can use Codex Desktop/unknown and applies only to the bridge child process.
 
 For background operation, use `scripts/start.ps1`. The project does not install a system service or an automatic startup entry.
 

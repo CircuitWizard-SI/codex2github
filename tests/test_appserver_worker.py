@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from codex2github import appserver_worker as worker
 
@@ -22,6 +22,25 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(worker.is_active_writer_error(
             "thread-store conflict: thread abc already has an active writer"))
         self.assertFalse(worker.is_active_writer_error("model is unavailable"))
+
+    def test_desktop_unknown_profile_sends_desktop_identity_and_terminal(self):
+        from dataclasses import replace
+        from codex2github import request_identity
+        settings = replace(worker.SETTINGS, user_agent_profile="desktop")
+        with patch.object(worker, "SETTINGS", settings), \
+             patch.object(request_identity, "SETTINGS", settings), \
+             patch.object(worker, "client_info", return_value={"name": "Codex Desktop", "version": "26.1007.21434"}), \
+             patch.object(worker, "verify_user_agent"):
+            with patch.object(worker.subprocess, "Popen") as popen:
+                process = popen.return_value
+                process.stdin = Mock()
+                process.stdout = MagicMock()
+                process.poll.return_value = None
+                client = worker.AppServer(self.root)
+            self.assertEqual(worker.codex_environment()["TERM"], "unknown")
+            self.assertEqual(worker.codex_environment()["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"], "Codex Desktop")
+            self.assertEqual(client.client_info, {"name": "Codex Desktop", "version": "26.1007.21434"})
+            client.close()
 
     def test_queue_confirms_conversation_settings_then_uses_official_cli(self):
         completed = Mock(returncode=0, stdout="Queued message abc-123 for thread session.\n", stderr="")

@@ -35,4 +35,6 @@ jobs:
           python -m pip wheel --no-deps --no-build-isolation -w dist .
       - name: Check distributable package contents
         shell: bash
-        run: python scripts/audit_public.py dist/*.whl
+        run: |
+          python scripts/normalize_release.py dist/*.whl
+          python scripts/audit_public.py dist/*.whl

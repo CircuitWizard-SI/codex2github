@@ -21,6 +21,19 @@ def anonymous_email(value: str) -> bool:
     return value.strip().lower().endswith("@users.noreply.github.com")
 
 
+def inspect_archive_metadata(name: str, archive: zipfile.ZipFile) -> list[tuple[str, str]]:
+    findings = []
+    if archive.comment:
+        findings.append((name, "release archive comment must be empty"))
+    for item in archive.infolist():
+        if item.date_time != (2000, 1, 1, 0, 0, 0) or item.extra or item.comment:
+            findings.append((name + ":" + item.filename, "release archive contains local timestamps or extra metadata"))
+        expected_mode = 0o40755 if item.is_dir() else 0o100644
+        if item.create_system != 3 or item.external_attr >> 16 != expected_mode:
+            findings.append((name + ":" + item.filename, "release archive permissions are not normalized"))
+    return findings
+
+
 def inspect(name: str, raw: bytes) -> list[tuple[str, str]]:
     path = Path(name)
     findings = []
@@ -97,6 +110,7 @@ def main():
         artifact = Path(argument)
         if artifact.suffix in {".whl", ".zip"}:
             with zipfile.ZipFile(artifact) as archive:
+                findings.extend(inspect_archive_metadata(artifact.name, archive))
                 for name in archive.namelist():
                     if name.endswith("/"):
                         continue

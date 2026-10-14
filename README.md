@@ -1,6 +1,6 @@
 # codex2github
 
-当前发布版本：[0.1.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.0)。使用 `codex2github --version` 查看已安装版本。
+当前发布版本：[0.1.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.1)。使用 `codex2github --version` 查看已安装版本。
 
 把 GitHub Issue 当作本机 Codex 的远程会话入口。用手机浏览器继续已有会话、切换模型、引导正在执行的任务，或把下一条消息排队。
 

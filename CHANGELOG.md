@@ -2,7 +2,13 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.0`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.1.1`。
+
+## [0.1.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.1)
+
+- 规范发行附件的 ZIP 元数据：固定文件时间、标准文件权限，清除额外字段及注释，避免携带本地修改时间和本地提交标记。
+- 新增发行包规范化工具及内容完整性／可重现检查；wheel 文件内容和 RECORD 校验保持有效。
+- 撤下 `0.1.0` 的原始发行附件，保留其源码标签与发布记录。GitHub 的提交和发布时间属于公开项目记录，继续保留。
 
 ## [0.1.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.0)
 

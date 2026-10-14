@@ -2,7 +2,13 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.3`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.1.4`。
+
+## [0.1.4](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.4)
+
+- 修复带 `codex-session` 标签的未绑定 Issue 被误判为只能连接旧会话，导致新任务遭拒的问题；兼容已存在的未绑定 Issue，保留模型和档位选择。
+- 会话入口增加“➕ 新建会话”链接，支持先选模型／档位再发送任务；已有会话绑定及目录入口语义保持不变。
+- 修复不自动重放旧消息；需要恢复的已拒绝请求须先确认没有执行记录，再单独提交。
 
 ## [0.1.3](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.3)
 

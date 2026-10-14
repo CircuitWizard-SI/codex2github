@@ -387,6 +387,53 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(len(self.router.state["issues"]["10"]["queue"]), 1)
         self.assertEqual(self.router.state["issues"]["10"]["queue"][0]["text"], "请处理这条任务")
 
+    def test_labeled_new_issue_accepts_effort_then_first_task_once(self):
+        issue = {"number": 10, "title": "新会话", "body": None, "labels": [{"name": "codex-session"}],
+                 "state": "open", "comments": 0, "user": {"login": "example-user"}}
+        comments = []
+        def pages(endpoint): return comments if endpoint.endswith("/comments") else [issue]
+        with patch.object(router, "threads", return_value=self.records), patch.object(router, "api", return_value={"private": True, "owner": {"login": "example-user"}}), patch.object(router, "page_list", side_effect=pages), patch.object(self.router, "reap"), patch.object(self.router, "busy", return_value=True):
+            self.router.tick()
+            comments.extend([{"id": 121, "body": "/effort xhigh", "user": {"login": "example-user"}},
+                             {"id": 122, "body": "执行这条新任务，保持原文", "user": {"login": "example-user"}}])
+            issue["comments"] = 2
+            self.router.tick()
+            self.router.tick()
+        queue = self.router.state["issues"]["10"]["queue"]
+        self.assertEqual(len(queue), 1)
+        self.assertIsNone(queue[0]["sid"])
+        self.assertEqual(queue[0]["text"], "执行这条新任务，保持原文")
+        self.assertEqual(queue[0]["effort"], "xhigh")
+
+    def test_existing_unbound_labeled_issue_is_migrated_without_replaying_old_comments(self):
+        self.router.state["issues"]["10"] = {"cursor": 121, "queue": [], "count": 1,
+                                              "body_done": True, "model": router.MODEL, "effort": "xhigh"}
+        issue = {"number": 10, "title": "新会话", "body": None, "labels": [{"name": "codex-session"}],
+                 "state": "open", "comments": 2, "user": {"login": "example-user"}}
+        comments = [{"id": 121, "body": "此前已处理的消息", "user": {"login": "example-user"}},
+                    {"id": 122, "body": "当前新任务", "user": {"login": "example-user"}}]
+        def pages(endpoint): return comments if endpoint.endswith("/comments") else [issue]
+        with patch.object(router, "threads", return_value=self.records), patch.object(router, "api", return_value={"private": True, "owner": {"login": "example-user"}}), patch.object(router, "page_list", side_effect=pages), patch.object(self.router, "reap"), patch.object(self.router, "busy", return_value=True):
+            self.router.tick()
+            self.router.tick()
+        queue = self.router.state["issues"]["10"]["queue"]
+        self.assertEqual([row["comment"] for row in queue], [122])
+        self.assertEqual(queue[0]["effort"], "xhigh")
+        self.assertEqual(self.router.state["issues"]["8"]["sid"], self.sid)
+
+    def test_unbound_hub_still_requires_an_explicit_existing_session(self):
+        self.router.state["hub"] = 10
+        self.router.state["issues"]["10"] = {"cursor": 0, "queue": [], "count": 0, "body_done": True}
+        issue = {"number": 10, "title": "会话入口", "body": None, "labels": [{"name": "codex-session"}],
+                 "state": "open", "comments": 1, "user": {"login": "example-user"}}
+        def pages(endpoint):
+            return [{"id": 122, "body": "未选择已有会话", "user": {"login": "example-user"}}] if endpoint.endswith("/comments") else [issue]
+        with patch.object(router, "threads", return_value=self.records), patch.object(router, "api", return_value={"private": True, "owner": {"login": "example-user"}}), patch.object(router, "page_list", side_effect=pages), patch.object(self.router, "reap"), patch.object(self.router, "refresh_hub"), patch.object(self.router, "busy", return_value=True):
+            self.router.tick()
+        self.assertFalse(self.router.state["issues"]["10"].get("new_task"))
+        self.assertEqual(self.router.state["issues"]["10"]["queue"], [])
+        self.assertIn("/session", self.replies[-1][1])
+
     def test_unregistered_foreign_closed_and_pull_request_are_not_started(self):
         base = {"title": "非任务", "body": "不能执行", "labels": [], "state": "open", "comments": 0, "user": {"login": "example-user"}}
         issues = [{**base, "number": 10, "user": {"login": "someone-else"}, "labels": [{"name": "codex-task"}]}, {**base, "number": 11, "state": "closed"}, {**base, "number": 12, "pull_request": {}}]

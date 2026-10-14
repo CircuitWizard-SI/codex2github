@@ -38,7 +38,7 @@ WORKSPACE = SETTINGS.workspace
 HOME = SETTINGS.codex_home
 STATE = BASE / "conversation-state.json"
 BOT = "<!-- codex2github:reply -->"
-HUB_REVISION = 11
+HUB_REVISION = 12
 HELP = """直接留言即可继续当前绑定的本机会话。
 
 - `/session 会话名或ID`：连接已有会话，也接受唯一的 ID 前缀。
@@ -294,8 +294,10 @@ class Router:
         current = self.state["issues"].get(str(self.state.get("hub")), {})
         current_id = current.get("sid")
         current_title = self.records.get(current_id, {}).get("display_title", "尚未选择")
+        new_chat = f"https://github.com/{REPO}/issues/new?" + urlencode({"title": "新会话", "labels": "codex-session"})
         text = (
             "<!-- codex2github:hub -->\n# 本机 Codex 对话入口\n\n"
+            f"**[➕ 新建会话]({new_chat})**：新建 Issue 后直接发送任务，也可以先选择模型和思考档位，无需先在桌面端创建。\n\n"
             "**本机会话列表由文件变化自动触发更新，连续写入合并处理，不调用模型、不消耗模型 token。GitHub 留言每 15 秒检查；手机端下拉刷新或重新打开即可看到最新列表。**\n\n"
             "最近主会话和其余主会话仅显示主会话；子代理统一放在下方的“子代理会话”列表。\n\n"
             "点击已有的聊天链接直接交流；没有聊天页的会话，在下面评论框发送该行的 `/session ID前缀` 即可连接。\n\n"
@@ -909,6 +911,13 @@ class Router:
             if str(number) not in self.state["issues"] and (issue.get("user", {}).get("login") != actor or issue.get("state") != "open"):
                 continue
             info = self.state["issues"].setdefault(str(number), {"cursor": 0, "queue": [], "count": -1})
+            # Labels do not select an existing chat. Only a binding/session
+            # command does; the dedicated hub keeps its existing-chat role.
+            if (not info.get("sid") and number != self.state.get("hub")
+                    and issue.get("user", {}).get("login") == actor and issue.get("state") == "open"
+                    and not info.get("new_task")):
+                info["new_task"] = True
+                self.save()
             if info.get("title") != issue["title"]:
                 info["title"] = issue["title"]
                 self.save()
@@ -918,14 +927,9 @@ class Router:
                 binding = re.search(r"<!-- codex2github:bind ([0-9a-f-]{36}) -->", body)
                 if binding:
                     info["sid"] = resolve(binding[1], self.records)
+                    info.pop("new_task", None)
                     self.state["rooms"].setdefault(info["sid"], number)
-                elif "codex-session" in labels:
-                    try:
-                        self.handle(number, body, 0)
-                    except ValueError as error:
-                        self.reply(number, str(error))
                 else:
-                    info["new_task"] = True
                     try:
                         self.handle(number, body, 0)
                     except ValueError as error:

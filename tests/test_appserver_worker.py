@@ -23,6 +23,18 @@ class WorkerTests(unittest.TestCase):
             "thread-store conflict: thread abc already has an active writer"))
         self.assertFalse(worker.is_active_writer_error("model is unavailable"))
 
+    def test_shutdown_does_not_close_stdout_while_reader_holds_it(self):
+        client = object.__new__(worker.AppServer)
+        client.process = Mock()
+        client.reader = Mock()
+        client.reader.is_alive.return_value = True
+        client.errors = Mock()
+        with self.assertRaisesRegex(TimeoutError, "reader"):
+            client.close()
+        client.process.stdout.close.assert_not_called()
+        client.errors.close.assert_called_once()
+
+
     def test_desktop_unknown_profile_sends_desktop_identity_and_terminal(self):
         from dataclasses import replace
         from codex2github import request_identity

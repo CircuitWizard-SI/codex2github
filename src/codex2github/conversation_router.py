@@ -27,6 +27,7 @@ from .queue_results import follow as follow_queued_result
 from .reasoning import model_efforts, model_efforts_many, default_effort, validate as validate_effort
 from .active_turn import active_turn
 from .thread_settings import steer_existing_thread
+from .autostart import manage as manage_autostart, reply as autostart_reply
 
 # Kept as a compatibility symbol for older integrations/tests.  It is never
 # used as a routing default; the active Codex route is read from codex_home.
@@ -38,7 +39,7 @@ WORKSPACE = SETTINGS.workspace
 HOME = SETTINGS.codex_home
 STATE = BASE / "conversation-state.json"
 BOT = "<!-- codex2github:reply -->"
-HUB_REVISION = 12
+HUB_REVISION = 13
 HELP = """直接留言即可继续当前绑定的本机会话。
 
 - `/session 会话名或ID`：连接已有会话，也接受唯一的 ID 前缀。
@@ -46,6 +47,7 @@ HELP = """直接留言即可继续当前绑定的本机会话。
 - `/models`：重新读取当前路由的工作模型列表。
 - `/effort`：查看当前模型的思考档位；`/effort high` 切换，`/effort auto` 跟随本机默认。
 - `/status`：查看会话、模型及排队状态。
+- `/autostart`：查看开机自启动；`/autostart on` 开启，`/autostart off` 关闭下次启动，本次监听继续。
 - `/steer 内容`：引导当前正在执行的任务，不等待本轮结束。
   发送后出现送达状态卡：👀 已读 → 🟡 已提交 → 🟢 会话已接收；未确认会明确显示。
 - `/queue 内容`：等当前回复结束后再执行；普通留言默认排队。
@@ -99,7 +101,7 @@ def resolve(selector: str, records: dict) -> str:
 
 def command(text: str) -> tuple[str, str, str] | None:
     first, _, rest = text.strip().partition("\n")
-    match = re.fullmatch(r"/(session|model|models|effort|reasoning|status|help|close|steer|queue|cancel)(?:\s+(.*))?", first, re.I)
+    match = re.fullmatch(r"/(session|model|models|effort|reasoning|status|help|close|steer|queue|cancel|autostart)(?:\s+(.*))?", first, re.I)
     if match:
         return match[1].lower(), (match[2] or "").strip(), rest.strip()
     if not rest.strip() and re.fullmatch(r"(?:请)?关闭(?:当前|这个|本)(?:任务|会话|[Ii]ssue)[。！!]?", first):
@@ -468,6 +470,18 @@ class Router:
                     raise ValueError("请单独发送 `/cancel`、`/cancel 消息ID` 或 `/cancel all`，不要附加其他内容。")
                 self.cancel_queue(number, value, comment_id)
                 return
+            elif verb == "autostart":
+                actions = {"": "status", "status": "status", "on": "enable", "enable": "enable",
+                           "off": "disable", "disable": "disable"}
+                if message or value.lower() not in actions:
+                    raise ValueError("请单独发送 `/autostart`、`/autostart on` 或 `/autostart off`。")
+                action = actions[value.lower()]
+                try:
+                    status = manage_autostart(SETTINGS, action, start=action == "enable")
+                except (OSError, RuntimeError) as error:
+                    raise ValueError(str(error)) from error
+                self.reply(number, autostart_reply(status))
+                return
             elif verb == "session":
                 try:
                     sid = resolve(value, self.records)
@@ -821,7 +835,8 @@ class Router:
         marker = f"<!-- codex2github:result {job['comment']} -->"
         effort = result.get("effort") or job.get("effort")
         detail = f" · 思考档位 `{effort}`" if effort and effort != "auto" else ""
-        text = marker + f"\n{'✅' if result.get('ok') else '❌'} {result.get('model') or job['model']}{detail}\n\n" + redact(result["final"])[:50000]
+        notice = "\n\n⚠️ 请求的模型未在当前路由中可用，已重新读取并使用当前路由模型；请你自行调整 CC Switch 路由。" if result.get("model_fallback") else ""
+        text = marker + f"\n{'✅' if result.get('ok') else '❌'} {result.get('model') or job['model']}{detail}{notice}\n\n" + redact(result["final"])[:50000]
         reply_id = result.get("final_reply_id")
         if not reply_id and result.get("result_post_attempted"):
             existing = next((row for row in page_list(f"{PREFIX}/issues/{number}/comments")
@@ -842,6 +857,10 @@ class Router:
             result = read_json(Path(job["directory"]) / "completion.json", {})
             if not result and process_alive(job["pid"]):
                 continue
+            if not result:
+                # A crash between finishing the turn and publishing its receipt
+                # must not discard a result or replay the original task.
+                result = read_json(Path(job["directory"]) / "run-result.json", {})
             info = self.state["issues"][number]
             if result.get("queued"):
                 job["transport"] = "codex-queue"
@@ -880,10 +899,8 @@ class Router:
                 self.reply(int(number), "监听到执行进程退出，未找到完成记录。这条消息不会重复执行；请重发消息。")
             elif not result.get("replied"):
                 final_path = Path(job["directory"]) / "final.md"
-                final = final_path.read_text(encoding="utf-8-sig") if final_path.exists() else result.get("error", "未找到最终回复。")
-                actual_model = result.get("model") or job["model"]
-                notice = "\n\n⚠️ 请求的模型未在当前路由中可用，已重新读取并使用当前路由模型；请你自行调整 CC Switch 路由。" if result.get("model_fallback") else ""
-                self.reply(int(number), f"{'✅' if result.get('ok') else '❌'} {actual_model}{notice}\n\n{redact(final)[:50000]}")
+                result["final"] = final_path.read_text(encoding="utf-8-sig") if final_path.exists() else result.get("final") or result.get("error", "未找到最终回复。")
+                self.publish_queued_result(number, job, result)
             # Recover a crash between saving a launched job and dequeuing it.
             if not result.get("retryable"):
                 info["queue"] = [request for request in info["queue"] if request["comment"] != job["comment"]]

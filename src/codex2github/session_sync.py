@@ -384,7 +384,8 @@ class Mirror:
 
 
 def run(args: list[str], cwd: Path | None = None, input_text: str | None = None) -> str:
-    result = subprocess.run(args, cwd=cwd, input=input_text, capture_output=True, encoding="utf-8", errors="replace", timeout=120)
+    result = subprocess.run(args, cwd=cwd, input=input_text, capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:
         # Avoid logging remote content or credential-bearing subprocess output.
         raise RuntimeError(f"{args[0]} {args[1]} failed (exit {result.returncode})")

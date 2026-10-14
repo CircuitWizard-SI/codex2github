@@ -77,7 +77,8 @@ def enable(settings, *, update=False):
     branch = metadata.get("default_branch") or "main"
     endpoint = f"{prefix}/contents/{WORKFLOW_PATH}"
     probe = subprocess.run(["gh", "api", endpoint + "?ref=" + quote(branch, safe="")],
-                           capture_output=True, text=True, encoding="utf-8", timeout=120)
+                           capture_output=True, text=True, encoding="utf-8", timeout=120,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     existing = None
     if probe.returncode == 0:
         existing = json.loads(probe.stdout)

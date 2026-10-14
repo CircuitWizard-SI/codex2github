@@ -2,7 +2,22 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.6`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.2.0`。
+
+## [0.2.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.0)
+
+- 新增可选 Windows 登录自启动及独立后台守护，默认关闭；监听不会随 Codex 窗口退出。
+- 私有 Issue 的拥有者可用 `/autostart on`、`/autostart off`、`/autostart` 开启、关闭下次启动及查看状态。
+- 修复 `pythonw` 后台监听仍弹出 GitHub CLI 窗口；隐藏所有项目子进程窗口。
+- 修复任务完成后在关闭 app-server 时卡住，导致回执缺失和后续消息一直排队；结果与回执先保存，再清理子进程。
+- stdout 读取线程未退出时不再阻塞关闭同一管道；清理异常独立记录，不丢弃已完成结果、不重跑任务。
+- worker 意外退出时恢复已保存结果，最终回复通过固定标记去重。
+- Persist completed results before shutdown and recover durable results without replaying tasks.
+
+## [0.1.7](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.7)
+
+- 支持仅作用于项目子进程的 Codex Desktop/unknown 请求身份，从已安装 Desktop 包读取版本并验证初始化返回值。
+- Add a Desktop/unknown User Agent profile without changing global Codex or CC Switch settings.
 
 ## [0.1.6](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.6)
 

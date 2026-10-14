@@ -7,7 +7,7 @@
 - 当前实际监听功能要求 Windows、Python 3.11+、Git、已登录的 GitHub CLI，以及已经可以正常执行任务的 Codex CLI。
 - 本机 Codex 模型路由与凭据由用户自行登录或配置，程序只读取已有设置。
 - 用户需要登录或授权 GitHub；若源码仓库尚未公开，还需要该仓库的读取权限。
-- 保持电脑开机、联网。继续 Desktop 已占用的会话时保持 Desktop 打开；项目不安装服务或开机启动项。
+- 保持电脑开机、联网。继续 Desktop 已占用的会话时保持 Desktop 打开；项目默认不安装系统服务或开机启动项，可选启用当前用户的登录自启动。
 - 启动监听后，当前版本会同步部署者本机全部可读会话历史（包括归档和子代理）到其私有任务仓库。会话中的代码和路径也可能上传，部署者应接受此范围。
 
 ## 安装与启动
@@ -34,9 +34,15 @@ gh repo create YOUR_USER/codex-tasks --private
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
-前台与后台选择一种即可。安装和 `init` 不会上传会话；启动 `watch` 才会持续检查任务和发布历史。电脑重启后重新运行启动命令。
+前台与后台选择一种即可。安装和 `init` 不会上传会话；启动 `watch` 才会持续检查任务和发布历史。未启用自启动时，电脑重启后重新运行启动命令。
 
 完成通知是独立的可选工作流。`notifications enable` 在任务仓库启用 GitHub Actions 提醒，要求凭据能写入工作流；失败时仍可启动聊天监听。GitHub Mobile 的“设置 → 通知 → Direct mentions（直接提及）”和手机系统通知权限需要用户自己打开。已有部署只需执行通知启用命令，不用重启、迁移或重新绑定会话。详见 README 的任务完成通知说明。
+
+## 可选开机自启动
+
+在本机执行 `.\.venv\Scripts\python.exe -m codex2github autostart enable --start`，或在私有任务 Issue 留言 `/autostart on`，即可启用当前用户登录后的自动启动并启动独立后台守护。`/autostart` 查看状态，`/autostart off` 关闭下次启动；当前已运行监听器和任务继续运行。命令行也支持 `autostart status` 与 `autostart disable`。
+
+该功能只管理本项目的用户计划任务，不安装系统服务，不更改 Codex 或 CC Switch 配置。计划任务不设运行时长限制，允许电池供电，退出后自动重试；前台监听仍在时守护等待接续，不重复启动 worker。Windows 未登录、睡眠或关机时留言保留在 GitHub，恢复后读取。
 
 ## 手机创建新会话
 

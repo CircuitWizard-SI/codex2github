@@ -6,12 +6,18 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from codex2github import session_sync as sync
 
 
 class ClassificationTests(unittest.TestCase):
+    def test_github_subprocess_runs_without_a_console_from_windowless_listener(self):
+        with patch.object(sync.subprocess, "CREATE_NO_WINDOW", 0x08000000, create=True), patch.object(sync.subprocess, "run", return_value=Mock(returncode=0, stdout='{}')) as process:
+            self.assertEqual(sync.api("repos/example-user/private-tasks"), {})
+        self.assertEqual(process.call_args.kwargs["creationflags"], 0x08000000)
+        self.assertTrue(process.call_args.kwargs["capture_output"])
+
     def test_origin_markers_and_legacy_paths_classify_without_title_guessing(self):
         cases = [
             ({"source": json.dumps({"subagent": {"thread_spawn": {"agent_path": None}}}), "agent_path": None}, True),

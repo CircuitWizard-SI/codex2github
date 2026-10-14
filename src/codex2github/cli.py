@@ -26,7 +26,11 @@ def main(argv=None) -> int:
     commands.add_parser("doctor", help="Read-only configuration and prerequisite checks")
     commands.add_parser("setup", help="Create a conversation hub in the configured private repository")
     commands.add_parser("tick", help="Process one remote-comment poll")
-    commands.add_parser("watch", help="Run the persistent Windows listener")
+    watch = commands.add_parser("watch", help="Run the persistent Windows listener")
+    watch.add_argument("--supervise", action="store_true", help="Keep a background listener available across failures")
+    startup = commands.add_parser("autostart", help="Opt in/out of startup after Windows login")
+    startup.add_argument("action", choices=["enable", "disable", "status"])
+    startup.add_argument("--start", action="store_true", help="Also start the independent background supervisor")
     sync = commands.add_parser("sync", help="Export histories into the local runtime mirror")
     sync.add_argument("--publish", action="store_true")
     sync.add_argument("--watch", action="store_true")
@@ -93,8 +97,11 @@ def main(argv=None) -> int:
             arguments += ["--interval", str(settings.sync_seconds), "--recovery-seconds", str(settings.recovery_seconds)]
             return sync_main(arguments)
         elif args.command == "watch":
-            from .watcher import watch
-            return watch(settings)
+            from .watcher import watch, supervise
+            return supervise(settings) if args.supervise else watch(settings)
+        elif args.command == "autostart":
+            from .autostart import manage
+            print(json.dumps(manage(settings, args.action, start=args.start), ensure_ascii=False))
         return 0
     except (OSError, ValueError, RuntimeError) as error:
         print(f"codex2github: {error}", file=sys.stderr)

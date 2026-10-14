@@ -26,7 +26,8 @@ def watch(settings) -> int:
             return subprocess.Popen(command("sync", "--watch", "--publish"), cwd=settings.workspace,
                                     stdout=sync_log, stderr=sync_errors, creationflags=subprocess.CREATE_NO_WINDOW)
         try:
-            setup = subprocess.run(command("setup"), cwd=settings.workspace, capture_output=True, text=True, encoding="utf-8")
+            setup = subprocess.run(command("setup"), cwd=settings.workspace, capture_output=True, text=True, encoding="utf-8",
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             if setup.returncode:
                 raise RuntimeError(setup.stderr.strip() or "Conversation router setup failed")
             log(setup.stdout.strip())
@@ -38,7 +39,8 @@ def watch(settings) -> int:
                 if child.poll() is not None:
                     log("History mirror exited; restarting")
                     child = start_sync()
-                tick = subprocess.run(command("tick"), cwd=settings.workspace, capture_output=True, text=True, encoding="utf-8")
+                tick = subprocess.run(command("tick"), cwd=settings.workspace, capture_output=True, text=True, encoding="utf-8",
+                                      creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
                 log(tick.stdout.strip() if tick.returncode == 0 else tick.stderr.strip())
                 time.sleep(settings.poll_seconds)
         except KeyboardInterrupt:
@@ -55,3 +57,21 @@ def watch(settings) -> int:
             for stream in (sync_log, sync_errors):
                 if stream:
                     stream.close()
+
+
+def supervise(settings) -> int:
+    """Wait for an existing listener or recover it, without stopping its workers."""
+    settings.runtime_dir.mkdir(parents=True, exist_ok=True)
+    with singleton(settings.runtime_dir / "supervisor.lock"):
+        while True:
+            try:
+                return watch(settings)
+            except KeyboardInterrupt:
+                return 0
+            except Exception as error:
+                # Keep transient startup/API failures and an existing listener
+                # from ending the independent scheduled process.
+                with (settings.runtime_dir / "supervisor.log").open("a", encoding="utf-8") as stream:
+                    stream.write(f"{datetime.now().isoformat(timespec='seconds')}  "
+                                 f"listener unavailable ({type(error).__name__}); retrying\n")
+                time.sleep(settings.poll_seconds)

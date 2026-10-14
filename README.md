@@ -2,7 +2,7 @@
 
 [简体中文](#zh-cn) · [English](#en)
 
-当前版本 / Current release: [0.1.7](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.7) · `codex2github --version`
+当前版本 / Current release: [0.2.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.0) · `codex2github --version`
 
 [![Tests](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -86,7 +86,15 @@ gh repo create YOUR_USER/codex-tasks --private
 
 保持电脑在线和监听器运行。GitHub 留言约每 15 秒读取；本机变化由文件事件触发，历史发布最短间隔 30 秒，15 分钟兜底检查。关闭前台监听器可按 `Ctrl+C`，已启动的任务继续执行。 项目不设任务总时长上限：运行超过 30 分钟仍持续等待 Codex 的真实完成或失败结果。 请求身份默认可配置为 Codex Desktop/unknown；该设置只作用于桥接子进程。
 
-后台启动可使用 `scripts/start.ps1`。此项目不自动安装系统服务或开机启动项。
+后台启动可使用 `scripts/start.ps1`。开机自启动默认关闭，按需启用：
+
+```powershell
+.\.venv\Scripts\python.exe -m codex2github autostart enable --start
+.\.venv\Scripts\python.exe -m codex2github autostart status
+.\.venv\Scripts\python.exe -m codex2github autostart disable
+```
+
+也可在私有任务仓库的 Issue 评论发送 `/autostart on`、`/autostart off` 或 `/autostart`。仅处理仓库拥有者的指令，不调用模型。开启后注册当前用户的 Windows 登录计划任务，后台守护独立于 Codex 窗口运行；启动失败会重试，关闭自启动不停止本次监听或执行中的任务。此选项不会修改 Codex、CC Switch、路由或系统权限。Windows 未登录、关机或休眠时不能处理消息，恢复后继续读取。
 
 #### 任务完成通知
 
@@ -233,7 +241,9 @@ Use the hub's **➕ New chat** link or create an Issue in your private task repo
 
 Keep your computer online and the listener running. GitHub comments are polled about every 15 seconds. Local file events trigger history updates with a minimum publication interval of 30 seconds and a recovery check every 15 minutes. Press `Ctrl+C` to stop the foreground listener; tasks already started continue running. The bridge imposes no total task duration limit: it keeps waiting for the actual Codex result even after 30 minutes. The request identity can use Codex Desktop/unknown and applies only to the bridge child process.
 
-For background operation, use `scripts/start.ps1`. The project does not install a system service or an automatic startup entry.
+For background operation, use `scripts/start.ps1`. Startup is off by default. Opt in with `codex2github autostart enable --start`; use `autostart status` to inspect it or `autostart disable` to turn off the next automatic start. In your private Issue, the equivalent owner-only commands are `/autostart on`, `/autostart`, and `/autostart off`.
+
+Enabling creates a Windows task for the current user's login. Its background supervisor runs independently of the Codex window and retries listener startup after failures. Disabling automatic startup keeps the current listener and active tasks running. Codex and CC Switch configuration, routes, and permissions stay unchanged. The computer must be awake and the user logged in to process messages.
 
 #### Completion notifications
 

@@ -345,6 +345,31 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(router.command("关闭这个任务"), ("close", "", ""))
         self.assertIsNone(router.command("任务完成后不要关闭这个任务"))
 
+    def test_autostart_can_be_controlled_from_issue_without_creating_a_task(self):
+        with patch.object(router, "manage_autostart", return_value={"enabled": True, "running": True}) as startup:
+            self.router.handle(8, "/autostart on", 801)
+            startup.assert_called_with(router.SETTINGS, "enable", start=True)
+            self.assertIn("已开启", self.replies[-1][1])
+            self.router.handle(8, "/autostart off", 802)
+            startup.assert_called_with(router.SETTINGS, "disable", start=False)
+            self.router.handle(8, "/autostart", 803)
+            startup.assert_called_with(router.SETTINGS, "status", start=False)
+            before = startup.call_count
+            for text in ("/autostart on\n顺便执行任务", "/autostart stop"):
+                with self.assertRaises(ValueError):
+                    self.router.handle(8, text, 804)
+            self.assertEqual(startup.call_count, before)
+        self.assertEqual(self.router.state["issues"]["8"]["queue"], [])
+
+    def test_non_owner_issue_comment_cannot_enable_local_autostart(self):
+        self.router.state["issues"]["8"].update(body_done=True)
+        issue = {"number": 8, "title": "已有会话", "body": "", "labels": [], "comments": 2}
+        comments = [{"id": 801, "body": "/autostart on", "user": {"login": "someone-else"}},
+                    {"id": 802, "body": "/autostart", "user": {"login": "example-user"}}]
+        with patch.object(router, "api", return_value={"private": True, "owner": {"login": "example-user"}}), patch.object(router, "page_list", side_effect=lambda endpoint: comments if endpoint.endswith("/comments") else [issue]), patch.object(self.router, "reap"), patch.object(router, "manage_autostart", return_value={}) as startup:
+            self.router.tick()
+        startup.assert_called_once_with(router.SETTINGS, "status", start=False)
+
     def test_cli_completion_does_not_change_issue_state(self):
         output = self.root / "job"
         output.mkdir()
@@ -354,6 +379,23 @@ class RouterTests(unittest.TestCase):
             self.router.reap()
             remote.assert_not_called()
         self.assertNotIn("8", self.router.state["jobs"])
+
+    def test_dead_worker_with_durable_result_is_recovered_before_next_queued_task(self):
+        directory = self.root / "shutdown-job"
+        directory.mkdir()
+        (directory / "run-result.json").write_text(json.dumps({"sid": self.sid, "turn_id": "turn",
+            "ok": True, "final": "已完成的真实结果", "model": router.MODEL, "transport": "appserver"}), encoding="utf-8")
+        self.router.state["jobs"]["8"] = {"pid": 12, "sid": self.sid, "model": router.MODEL,
+                                         "directory": str(directory), "comment": 123}
+        self.router.state["issues"]["8"]["queue"] = [{"comment": 124, "text": "后续任务"}]
+        with patch.object(router, "process_alive", return_value=False):
+            self.router.reap()
+            self.router.reap()
+        self.assertEqual(len(self.replies), 1)
+        self.assertIn("已完成的真实结果", self.replies[0][1])
+        self.assertNotIn("未找到完成记录", self.replies[0][1])
+        self.assertNotIn("8", self.router.state["jobs"])
+        self.assertEqual([q["comment"] for q in self.router.state["issues"]["8"]["queue"]], [124])
 
     def test_owner_new_issue_without_label_accepts_model_and_first_message(self):
         issue = {"number": 10, "title": "创建新会话", "body": "/model " + router.MODEL, "labels": [], "state": "open", "comments": 0, "user": {"login": "example-user"}}

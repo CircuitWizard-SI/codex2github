@@ -3,12 +3,38 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from codex2github import worker
 
 
 class ResultTests(unittest.TestCase):
+    def test_result_survives_worker_shutdown_failure_without_rerunning_task(self):
+        with tempfile.TemporaryDirectory(dir=worker.BASE) as temporary:
+            directory = Path(temporary)
+            prompt = directory / "prompt.md"
+            prompt.write_text("remote task", encoding="utf-8")
+            result = {"sid": "session", "turn_id": "turn", "ok": True,
+                      "final": "finished", "model": "model", "transport": "appserver"}
+            client = Mock()
+            def close():
+                self.assertTrue((directory / "completion.json").exists(), "Completion must be durable before shutdown")
+                saved = json.loads((directory / "run-result.json").read_text(encoding="utf-8"))
+                self.assertEqual(saved["final"], "finished")
+                self.assertTrue(saved["ok"])
+                raise TimeoutError("shutdown did not finish")
+            client.close.side_effect = close
+            with patch.object(worker, "api", return_value={"private": True}), patch.object(worker, "AppServer", return_value=client), patch.object(worker, "run_turn", return_value=result) as execute, patch.object(worker, "post_result", return_value={"id": 7}) as publish:
+                code = worker.main(["--issue", "5", "--prompt-file", str(prompt), "--model", "model",
+                                    "--cwd", str(directory), "--job-directory", str(directory)])
+            self.assertEqual(code, 0)
+            execute.assert_called_once()
+            publish.assert_called_once()
+            saved = json.loads((directory / "completion.json").read_text(encoding="utf-8"))
+            self.assertTrue(saved["ok"])
+            self.assertTrue(saved["replied"])
+            self.assertIn("close_error", json.loads((directory / "cleanup.json").read_text(encoding="utf-8")))
+
     def test_route_reset_resolves_auto_before_existing_thread_settings(self):
         with tempfile.TemporaryDirectory(dir=worker.BASE) as temporary:
             directory = Path(temporary)

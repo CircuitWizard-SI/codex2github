@@ -143,10 +143,18 @@ class AppServer:
             self.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             self.process.terminate()
-            self.process.wait(timeout=5)
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=5)
         self.reader.join(2)
-        self.process.stdout.close()
         self.errors.close()
+        if self.reader.is_alive():
+            # Descendants may inherit stdout. Closing TextIOWrapper while its
+            # reader holds the lock can block forever after the turn completed.
+            raise TimeoutError("Codex shutdown reader did not exit; result was preserved")
+        self.process.stdout.close()
 
 
 def json_file(path: Path, data: dict):
@@ -195,7 +203,8 @@ def queue_existing_thread(prompt: str, model: str, cwd: str, sid: str, timeout: 
     try:
         completed = subprocess.run(arguments, cwd=cwd if cwd and Path(cwd).is_dir() else None,
                                    env=environment, capture_output=True, text=True,
-                                   encoding="utf-8", errors="replace", timeout=timeout)
+                                   encoding="utf-8", errors="replace", timeout=timeout,
+                                   creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except (OSError, subprocess.TimeoutExpired) as error:
         raise RpcError(str(error)) from error
     if completed.returncode:
@@ -344,6 +353,7 @@ def main(argv=None):
         result.update(error=str(error), final="执行失败：" + str(error))
         write_if_changed(directory / "final.md", result["final"])
     finally:
+        json_file(directory / "run-result.json", result)
         try:
             runtime_path = directory / "runtime.json"
             if runtime_path.exists():

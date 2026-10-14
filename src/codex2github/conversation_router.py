@@ -113,6 +113,8 @@ def command(text: str) -> tuple[str, str, str] | None:
 
 
 def process_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False  # Sentinel values are not worker PIDs or process groups.
     if os.name != "nt":
         try:
             os.kill(pid, 0); return True

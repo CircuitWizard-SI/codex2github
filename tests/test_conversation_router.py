@@ -12,6 +12,12 @@ from codex2github.session_sync import chat_link
 
 
 class RouterTests(unittest.TestCase):
+    def test_absent_worker_pid_never_checks_a_posix_process_group(self):
+        with patch.object(router.os, "name", "posix"), patch.object(router.os, "kill") as check:
+            self.assertFalse(router.process_alive(0))
+            self.assertFalse(router.process_alive(-1))
+        check.assert_not_called()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=router.BASE)
         self.root = Path(self.temp.name)

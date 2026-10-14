@@ -2,7 +2,7 @@
 
 [简体中文](#zh-cn) · [English](#en)
 
-当前版本 / Current release: [0.2.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.1) · `codex2github --version`
+当前版本 / Current release: [0.2.2](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.2) · `codex2github --version`
 
 [![Tests](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)

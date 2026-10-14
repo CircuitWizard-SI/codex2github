@@ -2,9 +2,15 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.2.1`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.2.2`。
 
-## [0.2.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.1)
+## [0.2.2](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.2)
+
+- 包含 0.2.1 的已有会话 Desktop 专用执行路径、断连等待和提交核对修复。
+- 修复非 Windows 下将 PID 0 误判为活跃进程，导致无 worker 的提交记录无法恢复核对；非正 PID 明确表示没有 worker。
+- Include Desktop-only execution for existing chats and fix recovery when a worker PID is absent. Nonpositive PIDs never identify a running worker.
+
+## 0.2.1（源码更新，未发行 / source update, unreleased）
 
 - 已有会话仅通过 Codex Desktop 的原会话接口和官方队列执行；删除独立 app-server 接管回退，并拒绝独立执行器恢复已有会话。
 - 桌面端不可用时保留原留言等待重连，限制重试频率，同一消息只提示一次；不更改任何 Codex 或 CC Switch 全局配置。

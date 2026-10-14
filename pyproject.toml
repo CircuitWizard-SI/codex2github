@@ -22,8 +22,8 @@ classifiers = [
 codex2github = "codex2github.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/CircuitWizard-SI/codex2github-source"
-Issues = "https://github.com/CircuitWizard-SI/codex2github-source/issues"
+Homepage = "https://github.com/CircuitWizard-SI/codex2github"
+Issues = "https://github.com/CircuitWizard-SI/codex2github/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

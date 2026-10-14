@@ -15,7 +15,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertFalse(is_private_task_repository({"private": True, "is_template": True}))
         self.assertFalse(is_private_task_repository({"private": False, "is_template": False}))
         self.assertFalse(is_private_task_repository({"private": True, "is_template": False,
-                         "full_name": "CircuitWizard-SI/codex2github-source"}))
+                         "full_name": "CircuitWizard-SI/codex2github"}))
         self.assertTrue(is_private_task_repository({"private": True, "is_template": False}))
 
     def test_default_codex_home_belongs_to_current_deployer(self):

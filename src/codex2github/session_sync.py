@@ -376,7 +376,7 @@ class Mirror:
             "## 同步范围\n\n"
             "包含本机索引中的主会话、归档会话和子代理会话，以及用户消息、Codex 答复和进度文字。图片附件留在本机。内置规则、内部推理、工具原始输出不进入阅读页面；常见凭据会隐藏。\n\n"
             "同步器只读取 Codex 数据，不修改原会话。只有目标仓库仍为私有时才允许推送。\n\n"
-            "[项目源码与安装说明](https://github.com/CircuitWizard-SI/codex2github-source) · [机器可读会话目录](sessions/index.json)\n"
+            "[项目源码与安装说明](https://github.com/CircuitWizard-SI/codex2github) · [机器可读会话目录](sessions/index.json)\n"
         )
         write_if_changed(self.output / "README.md", readme)
         write_if_changed(self.state_file, json.dumps({"schema": SCHEMA, "threads": cache, "stats": stats}, ensure_ascii=False))

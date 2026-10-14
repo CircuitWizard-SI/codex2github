@@ -10,7 +10,7 @@ import re
 import tomllib
 
 
-SOURCE_REPOSITORY = "CircuitWizard-SI/codex2github-source"
+SOURCE_REPOSITORY = "CircuitWizard-SI/codex2github"
 
 
 def is_private_task_repository(metadata: dict) -> bool:

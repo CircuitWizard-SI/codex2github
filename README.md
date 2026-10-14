@@ -6,7 +6,7 @@
 
 用户部署时创建自己的专用私有任务仓库，运行程序后自动读取当前用户的 `CODEX_HOME`，未设置时读取当前用户的 `~/.codex`。程序拒绝向本源码仓库及 GitHub 模板仓库发送任务和历史，即使它们是私有的。已部署用户继续使用原来的私人任务仓库，无需迁移或重新绑定会话。
 
-[![Tests](https://github.com/CircuitWizard-SI/codex2github-source/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github-source/actions/workflows/tests.yml)
+[![Tests](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 当前是 Windows 优先的早期版本，移动端使用 GitHub 网页。独立移动端 App 和桌面客户端尚未实现；后续接入方向见 [路线图](docs/ROADMAP.md)。
@@ -42,8 +42,8 @@ flowchart LR
 ### 1. 下载和安装
 
 ```powershell
-git clone https://github.com/CircuitWizard-SI/codex2github-source.git
-cd codex2github-source
+git clone https://github.com/CircuitWizard-SI/codex2github.git
+cd codex2github
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 gh auth login

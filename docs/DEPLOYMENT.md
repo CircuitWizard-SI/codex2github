@@ -16,8 +16,8 @@
 
 ```powershell
 gh auth login
-gh repo clone CircuitWizard-SI/codex2github-source
-cd codex2github-source
+gh repo clone CircuitWizard-SI/codex2github
+cd codex2github
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 gh repo create YOUR_USER/codex-tasks --private
@@ -45,6 +45,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 
 可以将下面的要求和仓库链接发给本机 Codex：
 
-> 请部署 https://github.com/CircuitWizard-SI/codex2github-source 。优先使用非 C 盘目录，在项目虚拟环境安装；允许创建我的专用私有任务仓库，生成项目配置，检查后启动后台监听器。部署前说明当前版本会将我的全部可读 Codex 会话历史上传到我的私有任务仓库。不得修改本机 Codex、CC Switch 的路由、密钥或权限配置；不安装系统服务或开机启动项。不要将源码模板配置为任务仓库。需要我登录时给出具体操作，完成后继续，最后提供手机聊天与新建会话链接。
+> 请部署 https://github.com/CircuitWizard-SI/codex2github 。优先使用非 C 盘目录，在项目虚拟环境安装；允许创建我的专用私有任务仓库，生成项目配置，检查后启动后台监听器。部署前说明当前版本会将我的全部可读 Codex 会话历史上传到我的私有任务仓库。不得修改本机 Codex、CC Switch 的路由、密钥或权限配置；不安装系统服务或开机启动项。不要将源码模板配置为任务仓库。需要我登录时给出具体操作，完成后继续，最后提供手机聊天与新建会话链接。
 
 通常只有登录、浏览器授权和实际出现的系统安装确认需要用户亲自操作。不需要用户把密钥发到聊天里。

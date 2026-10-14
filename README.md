@@ -20,6 +20,7 @@
 - `/queue` 排队或查看队列，`/cancel` 撤回等待消息。
 - 本机文件通知触发会话目录及历史更新，合并连续写入；子代理独立分类。
 - 任务完成、回复结束或执行失败后保持 Issue 打开，只有用户明确要求才关闭。
+- 可启用完成通知：任务结果发布后，GitHub Actions 单独 @仓库拥有者，供 GitHub Mobile 推送。
 
 已有会话先通过 Windows Desktop 的会话接口应用并读回目标对话的模型和档位，再通过 Codex 官方 `queue` CLI 提交原文。该接口仅能调整下一轮的 `model`、`effort`，不能修改全局配置、路由或权限。桌面端正在执行的一轮继续完成；接口不可用时回退到 CLI app-server，写入冲突会自动等待。
 
@@ -67,6 +68,7 @@ gh repo create YOUR_USER/codex-tasks --private
 ```powershell
 .\.venv\Scripts\python.exe -m codex2github doctor
 .\.venv\Scripts\python.exe -m codex2github setup
+.\.venv\Scripts\python.exe -m codex2github notifications enable
 .\.venv\Scripts\python.exe -m codex2github watch
 ```
 
@@ -75,6 +77,16 @@ gh repo create YOUR_USER/codex-tasks --private
 保持电脑在线和监听器运行。GitHub 留言约每 15 秒读取；本机变化由文件事件触发，历史发布最短间隔 30 秒，15 分钟兜底检查。关闭前台监听器可按 `Ctrl+C`，已启动的任务继续执行。
 
 后台启动可使用 `scripts/start.ps1`。此项目不自动安装系统服务或开机启动项。
+
+### 任务完成通知
+
+`notifications enable` 只在你的私有任务仓库安装独立的 Actions 工作流。完整任务回复仍由当前账号发表；工作流看到真正的最终回复后，以 `github-actions[bot]` 追加一条 @你的简短提醒和结果链接。排队回执、模型查询和引导卡不通知，启用时不会补发旧任务。
+
+手机安装 GitHub Mobile，在“设置 → 通知”开启 **Direct mentions（直接提及）**，并允许系统通知。只用手机浏览器不会自动获得 GitHub Mobile 推送；推送仍受手机权限、勿扰和工作时段设置影响。
+
+需要仓库允许 GitHub Actions，并且当前 GitHub CLI 凭据有写入工作流的权限。工作流不检出仓库，不执行任务文字，不调用模型，也不在日志打印对话；只读取必要的 Issue／评论并追加通知。它不编辑或删除评论，不改变仓库默认 token 权限。单个任务工作流使用 `issues: write`，GitHub 不提供更细的“只新增评论”权限。私有仓库运行工作流会使用 GitHub Actions 额度。
+
+`notifications disable` 只停用通知工作流，聊天和历史同步继续工作。通知失败不会重新执行任务；可在仓库 Actions 页面重新运行失败的通知，程序会检查已有提醒避免重复。只想验证手机通知时，可对一个已有最终回复运行 `notifications test --issue ISSUE_NUMBER --comment FINAL_COMMENT_ID`，提醒明确标记为“通知测试”。
 
 ## 评论指令
 

@@ -395,7 +395,8 @@ def api(endpoint: str, method: str = "GET", body: dict | None = None) -> dict:
     args = ["gh", "api", endpoint, "--method", method]
     if body is not None:
         args += ["--input", "-"]
-    return json.loads(run(args, input_text=json.dumps(body, ensure_ascii=False) if body is not None else None))
+    output = run(args, input_text=json.dumps(body, ensure_ascii=False) if body is not None else None)
+    return json.loads(output) if output else {}
 
 
 def blob_sha(data: bytes) -> str:

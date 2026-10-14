@@ -24,6 +24,7 @@ gh repo create YOUR_USER/codex-tasks --private
 .\.venv\Scripts\python.exe -m codex2github init --repo YOUR_USER/codex-tasks
 .\.venv\Scripts\python.exe -m codex2github doctor
 .\.venv\Scripts\python.exe -m codex2github setup
+.\.venv\Scripts\python.exe -m codex2github notifications enable
 .\.venv\Scripts\python.exe -m codex2github watch
 ```
 
@@ -34,6 +35,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
 ```
 
 前台与后台选择一种即可。安装和 `init` 不会上传会话；启动 `watch` 才会持续检查任务和发布历史。电脑重启后重新运行启动命令。
+
+完成通知是独立的可选工作流。`notifications enable` 在任务仓库启用 GitHub Actions 提醒，要求凭据能写入工作流；失败时仍可启动聊天监听。GitHub Mobile 的“设置 → 通知 → Direct mentions（直接提及）”和手机系统通知权限需要用户自己打开。已有部署只需执行通知启用命令，不用重启、迁移或重新绑定会话。详见 README 的任务完成通知说明。
 
 ## 手机创建新会话
 

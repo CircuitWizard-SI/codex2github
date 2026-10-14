@@ -29,6 +29,10 @@ def main(argv=None) -> int:
     sync.add_argument("--watch", action="store_true")
     open_command = commands.add_parser("open", help="Create/reuse a room for an original session")
     open_command.add_argument("selector")
+    notices = commands.add_parser("notifications", help="Enable/disable independent completion mentions")
+    notices.add_argument("action", choices=["enable", "disable", "test"])
+    notices.add_argument("--issue", type=int, help="Existing Issue for a labeled notification test")
+    notices.add_argument("--comment", type=int, help="Existing completed task reply ID for the test")
     args = parser.parse_args(argv)
     if args.config:
         os.environ["CODEX2GITHUB_CONFIG"] = str(args.config.resolve())
@@ -64,7 +68,16 @@ def main(argv=None) -> int:
             checks["private_task_repository"] = is_private_task_repository(metadata)
             print(json.dumps({"ok": all(checks.values()), "checks": checks}, ensure_ascii=False, indent=2))
             return 0 if all(checks.values()) else 1
-        if args.command in {"setup", "tick", "open"}:
+        if args.command == "notifications":
+            from .notifications import enable, disable, test_notice
+            if args.action == "test":
+                if not args.issue or not args.comment:
+                    raise ValueError("notifications test requires --issue and --comment")
+                result = test_notice(settings, args.issue, args.comment)
+            else:
+                result = enable(settings) if args.action == "enable" else disable(settings)
+            print(json.dumps(result, ensure_ascii=False))
+        elif args.command in {"setup", "tick", "open"}:
             from .conversation_router import main as router_main
             router_main(["--open", args.selector] if args.command == "open" else ["--" + args.command])
         elif args.command == "sync":

@@ -9,12 +9,19 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 import urllib.error
 import urllib.request
 
 
 FINAL = re.compile(r"^<!-- codex2github:reply -->\r?\n"
                    r"(?:<!-- codex2github:result [1-9][0-9]* -->\r?\n)?([✅❌])(?: |\r?\n)")
+
+
+class NoticeRequestError(RuntimeError):
+    def __init__(self, message, *, uncertain=False):
+        super().__init__(message)
+        self.uncertain = uncertain
 
 
 def positive_id(value):
@@ -43,15 +50,35 @@ class NoticeAPI:
             data=json.dumps(body).encode() if body is not None else None,
             headers={"Authorization": "Bearer " + self.token, "Accept": "application/vnd.github+json",
                      "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28"})
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as error:
-            raise RuntimeError(f"GitHub notification API failed (HTTP {error.code})") from None
-        except (OSError, ValueError):
-            # A POST timeout is uncertain. Do not repeat it automatically; a
-            # workflow rerun first reconciles the stable marker with GitHub.
-            raise RuntimeError("GitHub notification API response unavailable; rerun to reconcile") from None
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as error:
+                code = error.code
+                error.close()
+                transient = code in {500, 502, 503, 504}
+                message = f"GitHub notification API failed (HTTP {code})"
+            except (OSError, ValueError):
+                transient = True
+                message = "GitHub notification API response unavailable"
+            if method == "GET" and transient and attempt < 2:
+                time.sleep(attempt + 1)
+                continue
+            # Never blindly retry a POST: the comment may already exist.
+            raise NoticeRequestError(message, uncertain=method == "POST" and transient) from None
+
+
+def notice_exists(api, prefix, issue_id, marker):
+    page = 1
+    while True:
+        comments = api.request(f"{prefix}/issues/{issue_id}/comments?per_page=100&page={page}")
+        if any((row.get("body") or "").startswith(marker + "\n") and
+               row.get("user", {}).get("login") == "github-actions[bot]" for row in comments):
+            return True
+        if len(comments) < 100:
+            return False
+        page += 1
 
 
 def notify(api, repo, issue_id, comment_id, *, test=False):
@@ -74,21 +101,24 @@ def notify(api, repo, issue_id, comment_id, *, test=False):
             or comment.get("user", {}).get("type") != "User"):
         raise ValueError("Not a completed task reply in this Issue")
     marker = f"<!-- codex2github:notice{'-test' if test else ''} {comment_id} -->"
-    page = 1
-    while True:
-        comments = api.request(f"{prefix}/issues/{issue_id}/comments?per_page=100&page={page}")
-        if any((row.get("body") or "").startswith(marker + "\n") and
-               row.get("user", {}).get("login") == "github-actions[bot]" for row in comments):
-            return "already sent"
-        if len(comments) < 100:
-            break
-        page += 1
+    if notice_exists(api, prefix, issue_id, marker):
+        return "already sent"
     status = "任务已完成" if match[1] == "✅" else "任务执行失败"
     label = "通知测试：" if test else ""
     # Construct the URL, never interpolate task output or user-controlled URLs.
     url = f"https://github.com/{repo}/issues/{issue_id}#issuecomment-{comment_id}"
     body = f"{marker}\n@{owner} {label}{status}。[查看结果]({url})"
-    api.request(f"{prefix}/issues/{issue_id}/comments", "POST", {"body": body})
+    try:
+        api.request(f"{prefix}/issues/{issue_id}/comments", "POST", {"body": body})
+    except NoticeRequestError as error:
+        if not error.uncertain:
+            raise
+        for delay in (1, 2, 4):
+            time.sleep(delay)
+            if notice_exists(api, prefix, issue_id, marker):
+                return "sent (reconciled)"
+        # Leave the workflow failed for a safe rerun, without another POST.
+        raise NoticeRequestError("Notification delivery unconfirmed; rerun to reconcile") from None
     return "sent"
 
 

@@ -35,6 +35,7 @@ def main(argv=None) -> int:
     notices.add_argument("action", choices=["enable", "disable", "test"])
     notices.add_argument("--issue", type=int, help="Existing Issue for a labeled notification test")
     notices.add_argument("--comment", type=int, help="Existing completed task reply ID for the test")
+    notices.add_argument("--update", action="store_true", help="Replace a reviewed, managed completion workflow")
     args = parser.parse_args(argv)
     if args.config:
         os.environ["CODEX2GITHUB_CONFIG"] = str(args.config.resolve())
@@ -72,12 +73,14 @@ def main(argv=None) -> int:
             return 0 if all(checks.values()) else 1
         if args.command == "notifications":
             from .notifications import enable, disable, test_notice
+            if args.update and args.action != "enable":
+                raise ValueError("--update is only valid with notifications enable")
             if args.action == "test":
                 if not args.issue or not args.comment:
                     raise ValueError("notifications test requires --issue and --comment")
                 result = test_notice(settings, args.issue, args.comment)
             else:
-                result = enable(settings) if args.action == "enable" else disable(settings)
+                result = enable(settings, update=args.update) if args.action == "enable" else disable(settings)
             print(json.dumps(result, ensure_ascii=False))
         elif args.command in {"setup", "tick", "open"}:
             from .conversation_router import main as router_main

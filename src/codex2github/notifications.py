@@ -71,7 +71,7 @@ def metadata_for(settings):
     return metadata, profile
 
 
-def enable(settings):
+def enable(settings, *, update=False):
     metadata, profile = metadata_for(settings)
     prefix = "repos/" + settings.repo
     branch = metadata.get("default_branch") or "main"
@@ -84,15 +84,21 @@ def enable(settings):
     elif "(HTTP 404)" not in probe.stderr:
         raise RuntimeError("Unable to inspect the notification workflow")
     content = workflow_body().encode("utf-8")
+    payload = None
+    identity = {"name": profile["login"],
+                "email": f"{profile['id']}+{profile['login']}@users.noreply.github.com"}
     if existing:
         original = base64.b64decode(existing.get("content", ""))
         if original != content:
-            raise ValueError("Existing notification workflow differs; review it before replacing")
+            if not update or not original.startswith(b"# Managed by codex2github notifications enable."):
+                raise ValueError("Existing notification workflow differs; review it, then use notifications enable --update for a managed workflow")
+            payload = {"sha": existing["sha"]}
     else:
-        identity = {"name": profile["login"],
-                    "email": f"{profile['id']}+{profile['login']}@users.noreply.github.com"}
-        api(endpoint, "PUT", {"message": "Add append-only Codex completion notifications", "branch": branch,
-            "content": base64.b64encode(content).decode("ascii"), "author": identity, "committer": identity})
+        payload = {}
+    if payload is not None:
+        payload.update({"message": "Update append-only Codex completion notifications", "branch": branch,
+                        "content": base64.b64encode(content).decode("ascii"), "author": identity, "committer": identity})
+        api(endpoint, "PUT", payload)
     # Explicitly enable only this workflow, never repository-wide permissions.
     api(f"{prefix}/actions/workflows/{WORKFLOW}/enable", "PUT")
     return {"enabled": True, "repo": settings.repo, "workflow": WORKFLOW_PATH}

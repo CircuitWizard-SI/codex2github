@@ -1,6 +1,6 @@
 # codex2github
 
-当前发布版本：[0.1.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.1)。使用 `codex2github --version` 查看已安装版本。
+当前发布版本：[0.1.2](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.2)。使用 `codex2github --version` 查看已安装版本。
 
 把 GitHub Issue 当作本机 Codex 的远程会话入口。用手机浏览器继续已有会话、切换模型、引导正在执行的任务，或把下一条消息排队。
 
@@ -89,6 +89,8 @@ gh repo create YOUR_USER/codex-tasks --private
 需要仓库允许 GitHub Actions，并且当前 GitHub CLI 凭据有写入工作流的权限。工作流不检出仓库，不执行任务文字，不调用模型，也不在日志打印对话；只读取必要的 Issue／评论并追加通知。它不编辑或删除评论，不改变仓库默认 token 权限。单个任务工作流使用 `issues: write`，GitHub 不提供更细的“只新增评论”权限。私有仓库运行工作流会使用 GitHub Actions 额度。
 
 `notifications disable` 只停用通知工作流，聊天和历史同步继续工作。通知失败不会重新执行任务；可在仓库 Actions 页面重新运行失败的通知，程序会检查已有提醒避免重复。只想验证手机通知时，可对一个已有最终回复运行 `notifications test --issue ISSUE_NUMBER --comment FINAL_COMMENT_ID`，提醒明确标记为“通知测试”。
+
+读取 GitHub 评论遇到临时 HTTP 500／502／503／504、网络超时或不完整响应时，自动最多尝试三次。发送后回执不明时只读核对提醒标记，不盲目重复发送。持续故障仍会在 Actions 中明确失败，重新运行通知不会重跑 Codex 任务。升级程序后，先审查任务仓库中现有的通知工作流；使用 `notifications enable --update` 替换项目管理的工作流，不修改仓库全局权限。
 
 ## 评论指令
 

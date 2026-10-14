@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import os
 import tempfile
+import io
+import urllib.error
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -35,6 +37,64 @@ class FakeAPI:
 
 
 class CompletionNoticeTests(unittest.TestCase):
+    def test_transient_comment_read_failure_retries_before_posting_one_notice(self):
+        fixtures = FakeAPI()
+        calls = []
+        def remote(request, timeout=30):
+            path = request.full_url.removeprefix("https://api.github.com/")
+            calls.append((path, request.method))
+            if path.endswith("/issues/comments/19") and sum(p == path for p, _ in calls) == 1:
+                raise urllib.error.HTTPError(request.full_url, 500, "synthetic service failure", {}, None)
+            body = json.loads(request.data) if request.data is not None else None
+            return io.BytesIO(json.dumps(fixtures.request(path, request.method, body)).encode())
+        with patch.object(action.urllib.request, "urlopen", side_effect=remote), patch("time.sleep") as wait:
+            self.assertEqual(action.notify(action.NoticeAPI("example-user/tasks", "synthetic-token"),
+                                           "example-user/tasks", 7, 19), "sent")
+        self.assertEqual(sum(path.endswith("/issues/comments/19") for path, _ in calls), 2)
+        self.assertEqual(sum(method == "POST" for _, method in calls), 1)
+        wait.assert_called_once()
+
+    def test_permanent_read_failures_are_bounded_and_never_post(self):
+        error = urllib.error.HTTPError("https://api.github.com/", 500, "synthetic", {}, None)
+        with patch.object(action.urllib.request, "urlopen", side_effect=error) as remote, patch("time.sleep"):
+            with self.assertRaises(RuntimeError):
+                action.notify(action.NoticeAPI("example-user/tasks", "synthetic-token"), "example-user/tasks", 7, 19)
+        self.assertEqual(remote.call_count, 3)
+        self.assertTrue(all(call.args[0].method == "GET" for call in remote.call_args_list))
+
+    def test_permission_denial_is_not_retried_and_never_exposes_response_text(self):
+        error = urllib.error.HTTPError("https://api.github.com/", 403, "private response", {}, None)
+        with patch.object(action.urllib.request, "urlopen", side_effect=error) as remote, patch("time.sleep") as wait:
+            with self.assertRaisesRegex(RuntimeError, "HTTP 403") as failure:
+                action.NoticeAPI("example-user/tasks", "synthetic-token").request("repos/example-user/tasks")
+        remote.assert_called_once()
+        wait.assert_not_called()
+        self.assertNotIn("private response", str(failure.exception))
+
+    def test_uncertain_post_is_reconciled_without_posting_again(self):
+        api = FakeAPI()
+        original = api.request
+        def request(endpoint, method="GET", body=None):
+            response = original(endpoint, method, body)
+            if method == "POST":
+                api.pages = [[{"body": body["body"], "user": {"login": "github-actions[bot]"}}]]
+                raise action.NoticeRequestError("Response lost", uncertain=True)
+            return response
+        api.request = request
+        with patch("time.sleep"):
+            self.assertEqual(action.notify(api, "example-user/tasks", 7, 19), "sent (reconciled)")
+        self.assertEqual(sum(method == "POST" for _, method, _ in api.calls), 1)
+
+    def test_unconfirmed_post_is_not_blindly_retried(self):
+        api = action.NoticeAPI("example-user/tasks", "synthetic-token")
+        error = urllib.error.HTTPError("https://api.github.com/", 500, "synthetic", {}, None)
+        with patch.object(action.urllib.request, "urlopen", side_effect=error) as remote, patch("time.sleep") as wait:
+            with self.assertRaises(action.NoticeRequestError) as failure:
+                api.request("repos/example-user/tasks/issues/7/comments", "POST", {"body": "notice"})
+        self.assertTrue(failure.exception.uncertain)
+        remote.assert_called_once()
+        wait.assert_not_called()
+
     def test_completed_result_gets_only_a_link_and_owner_mention(self):
         api = FakeAPI()
         self.assertEqual(action.notify(api, "example-user/tasks", 7, 19), "sent")
@@ -171,6 +231,17 @@ class CompletionNoticeTests(unittest.TestCase):
                 patch.object(notifications, "api") as remote, self.assertRaises(ValueError):
             notifications.enable(settings)
         remote.assert_not_called()
+
+    def test_reviewed_managed_update_uses_the_original_file_sha(self):
+        settings = SimpleNamespace(repo="example-user/tasks")
+        old = b"# Managed by codex2github notifications enable.\nold script"
+        probe = SimpleNamespace(returncode=0, stdout=json.dumps({"sha": "original-file-sha",
+                                "content": base64.b64encode(old).decode()}))
+        with patch.object(notifications, "metadata_for", return_value=({"default_branch": "main"}, {"login": "example-user", "id": 123})), \
+                patch.object(notifications.subprocess, "run", return_value=probe), patch.object(notifications, "api", return_value={}) as remote:
+            notifications.enable(settings, update=True)
+        self.assertEqual(remote.call_args_list[0].args[2]["sha"], "original-file-sha")
+        self.assertEqual(remote.call_args_list[0].args[2]["author"], remote.call_args_list[0].args[2]["committer"])
 
 
 if __name__ == "__main__":

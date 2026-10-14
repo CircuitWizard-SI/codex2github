@@ -2,7 +2,13 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.1.1`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.1.2`。
+
+## [0.1.2](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.2)
+
+- 修复通知工作流读取最终评论遇到 GitHub 临时 HTTP 500 后直接退出的问题；只读请求有限重试，权限拒绝直接报告。
+- 发送回执不明时核对固定提醒标记，不盲目重复发送，不重跑 Codex 任务。
+- 提供 `notifications enable --update`，以原文件 SHA 安全更新审查过的项目通知工作流。
 
 ## [0.1.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.1)
 

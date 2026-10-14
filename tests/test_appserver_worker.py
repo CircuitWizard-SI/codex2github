@@ -18,6 +18,13 @@ class WorkerTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
+    def test_independent_turn_rejects_existing_chat_before_initializing(self):
+        client = Mock()
+        with self.assertRaisesRegex(worker.RpcError, "Desktop"):
+            worker.run_turn(client, self.root, "original", "model", str(self.root), sid="existing")
+        client.initialize.assert_not_called()
+        client.call.assert_not_called()
+
     def test_active_writer_conflict_is_retryable(self):
         self.assertTrue(worker.is_active_writer_error(
             "thread-store conflict: thread abc already has an active writer"))
@@ -87,6 +94,30 @@ class WorkerTests(unittest.TestCase):
                 worker.queue_existing_thread("原始任务", "gpt-6.1-sol", str(self.root), "session", effort="ultra")
         run.assert_not_called()
 
+    def test_queue_timeout_preserves_boundary_and_never_resubmits(self):
+        boundary = {"rollout_path": "fixture-rollout", "rollout_offset": 123, "submitted_at_ms": 1}
+        with patch.object(worker, "apply_existing_thread", return_value={"model": "model"}), \
+             patch.object(worker, "codex_command", return_value=["codex.exe"]), \
+             patch.object(worker, "submission_snapshot", return_value=boundary), \
+             patch.object(worker.subprocess, "run", side_effect=worker.subprocess.TimeoutExpired("queue", 30)) as run:
+            with self.assertRaises(worker.QueueSubmissionUncertain) as caught:
+                worker.queue_existing_thread("original", "model", str(self.root), "session", directory=self.root)
+        run.assert_called_once()
+        self.assertEqual(caught.exception.receipt["rollout_offset"], 123)
+        saved = json.loads((self.root / "submission-attempt.json").read_text(encoding="utf-8"))
+        self.assertTrue(saved["submission_uncertain"])
+        self.assertTrue(saved["queued"])
+
+    def test_queue_connection_refused_is_safe_to_wait_before_resending(self):
+        completed = Mock(returncode=1, stdout="", stderr="connection refused")
+        with patch.object(worker, "apply_existing_thread", return_value={"model": "model"}), \
+             patch.object(worker, "codex_command", return_value=["codex.exe"]), \
+             patch.object(worker.subprocess, "run", return_value=completed):
+            with self.assertRaises(worker.SettingsUnavailable):
+                worker.queue_existing_thread("original", "model", str(self.root), "session", directory=self.root)
+        saved = json.loads((self.root / "submission-attempt.json").read_text(encoding="utf-8"))
+        self.assertFalse(saved["queued"])
+
     def test_model_fallback_resets_effort_to_new_route_default(self):
         rpc = Mock()
         rpc.notifications = queue.Queue()
@@ -95,7 +126,7 @@ class WorkerTests(unittest.TestCase):
         rpc.call.side_effect = [worker.RpcError("model unavailable"), {"config": {"model": "route-default"}},
                                 {"thread": {"id": "session"}}, {"turn": {"id": "turn"}}]
         with patch.object(worker, "default_effort", return_value="medium"):
-            result = worker.run_turn(rpc, self.root, "原始任务", "old-model", str(self.root), "session", "ultra")
+            result = worker.run_turn(rpc, self.root, "原始任务", "old-model", str(self.root), effort="ultra")
         self.assertEqual(rpc.call.call_args.args, ("turn/start", {"threadId": "session",
                          "input": [{"type": "text", "text": "原始任务", "text_elements": []}], "effort": "medium"}))
         self.assertEqual((result["model"], result["effort"]), ("route-default", "medium"))
@@ -107,7 +138,7 @@ class WorkerTests(unittest.TestCase):
                 rpc = Mock()
                 rpc.process.poll.return_value = None
                 rpc.call.side_effect = lambda method, params: (
-                    {"thread": {"id": "session"}} if method == "thread/resume"
+                    {"thread": {"id": "session"}} if method == "thread/start"
                     else {"turn": {"id": "turn"}})
                 def next_event(timeout):
                     if clock[0] == 0:
@@ -120,7 +151,7 @@ class WorkerTests(unittest.TestCase):
                                  if status == "completed" else []}}}
                 rpc.notifications.get.side_effect = next_event
                 with patch("time.monotonic", side_effect=lambda: clock[0]):
-                    result = worker.run_turn(rpc, self.root, "unchanged task", "configured-model", str(self.root), "session")
+                    result = worker.run_turn(rpc, self.root, "unchanged task", "configured-model", str(self.root))
                 self.assertEqual(result["ok"], status == "completed")
                 self.assertEqual(result["final"], "long task finished" if status == "completed"
                                  else "Codex 执行未完成：actual server failure")
@@ -170,7 +201,7 @@ for line in sys.stdin:
  method=request['method']
  if method=='initialized': continue
  if method=='initialize': result={}
- elif method=='thread/resume': result={'thread':{'id':request['params']['threadId']}}
+ elif method=='thread/start': result={'thread':{'id':'session'}}
  elif method=='turn/start':
   assert request['params']['input']==[{'type':'text','text':'task','text_elements':[]}]
   assert request['params']['effort']=='xhigh'
@@ -187,7 +218,7 @@ for line in sys.stdin:
         self.control()
         rpc = worker.AppServer(self.root, [sys.executable, "-u", str(fixture)])
         try:
-            result = worker.run_turn(rpc, self.root, "task", "configured-model", str(self.root), sid="session", effort="xhigh")
+            result = worker.run_turn(rpc, self.root, "task", "configured-model", str(self.root), effort="xhigh")
         finally:
             rpc.close()
         self.assertTrue(result["ok"])

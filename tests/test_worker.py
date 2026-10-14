@@ -6,9 +6,34 @@ import unittest
 from unittest.mock import Mock, patch
 
 from codex2github import worker
+from codex2github.appserver_worker import SettingsUnavailable, RpcError
 
 
 class ResultTests(unittest.TestCase):
+    def test_existing_chat_never_starts_independent_server_on_desktop_failure(self):
+        for error, expected in [(SettingsUnavailable("desktop disconnected"), 75),
+                                (RpcError("connection reset after submission"), 1)]:
+            with self.subTest(error=type(error).__name__), tempfile.TemporaryDirectory(dir=worker.BASE) as temporary:
+                directory = Path(temporary)
+                prompt = directory / "prompt.md"
+                prompt.write_text("original task", encoding="utf-8")
+                with patch.object(worker, "api", return_value={"private": True}), \
+                     patch.object(worker, "queue_existing_thread", side_effect=error), \
+                     patch.object(worker, "AppServer") as independent, \
+                     patch.object(worker, "run_turn") as turn, \
+                     patch.object(worker, "post_result", return_value={"id": 7}) as publish:
+                    code = worker.main(["--issue", "5", "--prompt-file", str(prompt),
+                                        "--model", "model", "--cwd", str(directory),
+                                        "--job-directory", str(directory), "--sid", "session"])
+                independent.assert_not_called()
+                turn.assert_not_called()
+                self.assertEqual(code, expected)
+                result = json.loads((directory / "completion.json").read_text(encoding="utf-8"))
+                self.assertEqual(result["transport"], "codex-queue")
+                if expected == 75:
+                    self.assertEqual(result["retry_reason"], "desktop-unavailable")
+                    publish.assert_not_called()
+
     def test_result_survives_worker_shutdown_failure_without_rerunning_task(self):
         with tempfile.TemporaryDirectory(dir=worker.BASE) as temporary:
             directory = Path(temporary)

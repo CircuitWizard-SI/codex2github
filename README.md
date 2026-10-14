@@ -2,7 +2,7 @@
 
 [简体中文](#zh-cn) · [English](#en)
 
-当前版本 / Current release: [0.2.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.0) · `codex2github --version`
+当前版本 / Current release: [0.2.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.1) · `codex2github --version`
 
 [![Tests](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml/badge.svg)](https://github.com/CircuitWizard-SI/codex2github/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -30,7 +30,7 @@
 - 任务完成、回复结束或执行失败后保持 Issue 打开，只有用户明确要求才关闭。
 - 可启用完成通知：任务结果发布后，GitHub Actions 单独 @仓库拥有者，供 GitHub Mobile 推送。
 
-已有会话先通过 Windows Desktop 的会话接口应用并读回目标对话的模型和档位，再通过 Codex 官方 `queue` CLI 提交原文。该接口仅能调整下一轮的 `model`、`effort`，不能修改全局配置、路由或权限。桌面端正在执行的一轮继续完成；接口不可用时回退到 CLI app-server，写入冲突会自动等待。
+已有会话先通过 Windows Desktop 的会话接口应用并读回目标对话的模型和档位，再通过 Codex 官方 `queue` CLI 提交原文。该接口仅能调整下一轮的 `model`、`effort`，不能修改全局配置、路由或权限。已有会话只由桌面端执行；接口不可用时原留言保留并自动等待重连，不启动独立 app-server 接管。提交回执不明时核对原会话，不自动重发。新会话暂时仍通过独立 app-server 创建；桌面端原生的新会话创建入口尚未实现。
 
 监听和同步使用本机文件／数据库与 GitHub 接口，不调用模型。实际对话和任务执行才使用模型额度。
 
@@ -185,7 +185,7 @@ This is an early release with Windows support as the priority. Mobile access use
 - Keep Issues open after completion or failure; close them only on the user's explicit request.
 - Optionally notify the repository owner after completion through a separate GitHub Actions mention, enabling GitHub Mobile push notifications.
 
-For an existing Windows Desktop chat, the bridge applies the requested next-turn model and effort through the chat owner's interface, reads them back, then submits the original text through Codex's `queue` CLI. That interface is restricted to chat settings and same-turn input; it cannot change global configuration, routes, or permissions. The active turn finishes normally. When the owner interface is unavailable, the bridge falls back to CLI app-server and waits if another writer still owns the chat.
+For an existing Windows Desktop chat, the bridge applies the requested next-turn model and effort through the chat owner's interface, reads them back, then submits the original text through Codex's `queue` CLI. That interface is restricted to chat settings and same-turn input; it cannot change global configuration, routes, or permissions. Existing chats execute only through Desktop. If its owner interface is unavailable, the original request stays pending until reconnection; no independent app-server takes over. Uncertain submissions are checked against the original chat without automatic replay. New chats still use independent app-server creation; native Desktop new-chat creation is not implemented yet.
 
 Polling and history synchronization use local files, databases, and GitHub APIs without calling a model. Only actual chats and task execution use model quota.
 

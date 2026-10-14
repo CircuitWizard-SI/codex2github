@@ -49,7 +49,7 @@ flowchart TD
 - 模型状态由本机路由指纹控制。`/model` 只写 `.runtime/conversation-state.json` 中的当前会话覆盖；发现本机路由变化后清除全部覆盖并把等待消息改为 `auto`。执行器随后读取新路由，其他会话不会被写入或改路由。
 - `/models` 与模型切换指令只读查询当前 Codex 端点的 `/models`；不可查询时读取当前路由的本机目录。成功查询的目录替代不完整快照，避免混入其它 provider 或保存的堆栈成员；空闲 watcher 不查询模型端点，也不修改本机配置。
 - `/effort` 和 `/model 模型ID 档位` 保存按原会话 ID 隔离的档位覆盖；`auto` 清除覆盖。换模型清除该会话旧档位，路由变化同时清除全部档位覆盖及等待消息旧档位。能力来自当前路由本机目录，未标注时保留明确提示。
-- 已有 Windows Desktop 会话先通过 `thread-follower-update-thread-settings` 只应用目标会话下一轮的 `model`、`effort`，再读回确认，之后调用官方 `queue` CLI 提交原文。CLI 的 `--model`、`-c model_reasoning_effort` 不会随队列请求传递，不能作为成功依据。设置接口没有 `config/*`、权限写入或当前轮次更新能力；watcher 不调用此写接口。接口不可用时使用 CLI 独立 app-server；writer 冲突会恢复未提交留言并等待。独立执行路径在 `turn/start` 明确发送 `effort`。
+- 已有 Windows Desktop 会话先通过 `thread-follower-update-thread-settings` 只应用目标会话下一轮的 `model`、`effort`，再读回确认，之后调用官方 `queue` CLI 提交原文。CLI 的 `--model`、`-c model_reasoning_effort` 不会随队列请求传递，不能作为成功依据。设置接口没有 `config/*`、权限写入或当前轮次更新能力；watcher 不调用此写接口。已有会话的接口不可用时保留原留言并等待桌面端重连，不允许独立 app-server 恢复已有会话。提交前持久化日志边界；回执超时或 worker 退出时只核对原会话，不自动重发。等待重连的重试至少间隔 30 秒且只提示一次；重试前清理明确未提交的旧等待记录。独立 app-server 只用于新建会话，在 `turn/start` 明确发送 `effort`。
 - CLI 入队回执只表示提交成功。路由器保留对应 job，按提交前日志边界、消息内容或原生 client ID 定位轮次，等到该轮次的最终消息与完成事件后才发布结果。读取游标保存在桥接器状态中，工具输出和其它轮次的回复不参与匹配。中断会明确说明，不重新提交原留言。
 - 最终回复发布失败时保留任务；已被 GitHub 接收但响应丢失时，通过固定结果标记找回原评论，避免重复回复。旧版本遗留的入队文件会恢复完成追踪，保持原任务不重跑。
 - 历史镜像合并 SQLite 投影和原始 JSONL（含压缩记录），补齐两种来源中各自缺失的可见消息。原生 `item_completed` 的消息阶段用于补全进度标识；重复表示只保留一份，不导出内部推理和工具内容。

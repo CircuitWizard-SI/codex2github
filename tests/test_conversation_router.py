@@ -332,6 +332,58 @@ class RouterTests(unittest.TestCase):
         self.assertNotIn("8", self.router.state["jobs"])
         self.assertIn("自动等待", self.replies[-1][1])
 
+    def test_desktop_wait_keeps_exact_request_and_sends_one_notice(self):
+        directory = self.root / "desktop-wait"
+        directory.mkdir()
+        request = {"comment": 8802, "text": "unchanged task", "sid": self.sid, "model": router.MODEL}
+        (directory / "completion.json").write_text(json.dumps({"sid": self.sid, "ok": False,
+            "retryable": True, "retry_reason": "desktop-unavailable"}), encoding="utf-8")
+        job = {"pid": 0, "sid": self.sid, "model": router.MODEL, "directory": str(directory),
+               "comment": 8802, "request": request}
+        for _ in range(2):
+            self.router.state["jobs"]["8"] = job.copy()
+            with patch.object(router.time, "time", return_value=100):
+                self.router.reap()
+        pending = self.router.state["issues"]["8"]["queue"]
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["text"], "unchanged task")
+        self.assertGreaterEqual(pending[0]["retry_after"], 130)
+        self.assertEqual(len(self.replies), 1)
+        self.assertIn("等待重连", self.replies[0][1])
+
+    def test_native_submission_crash_follows_durable_attempt_without_replay(self):
+        directory = self.root / "uncertain-send"
+        directory.mkdir()
+        attempt = {"sid": self.sid, "model": router.MODEL, "queued": True, "ok": False,
+                   "submission_uncertain": True, "execution_complete": False, "rollout_offset": 123}
+        (directory / "submission-attempt.json").write_text(json.dumps(attempt), encoding="utf-8")
+        self.router.state["jobs"]["8"] = {"pid": 0, "sid": self.sid, "model": router.MODEL,
+            "directory": str(directory), "comment": 8803, "request": {"text": "original"}}
+        with patch.object(router, "follow_queued_result", return_value=None) as follow, \
+             patch.object(self.router, "launch") as launch:
+            self.router.reap()
+        follow.assert_called_once()
+        self.assertEqual(follow.call_args.args[1]["rollout_offset"], 123)
+        self.assertIn("8", self.router.state["jobs"])
+        launch.assert_not_called()
+        self.assertEqual(self.replies, [])
+
+    def test_retry_launch_removes_stale_wait_record_before_starting_worker(self):
+        request = {"comment": 8804, "text": "original", "sid": self.sid, "model": router.MODEL}
+        directory = self.root / "jobs" / "8-8804"
+        directory.mkdir(parents=True)
+        for name in ("completion.json", "run-result.json"):
+            (directory / name).write_text(json.dumps({"retryable": True}), encoding="utf-8")
+        def start(*args, **kwargs):
+            self.assertFalse((directory / "completion.json").exists())
+            self.assertFalse((directory / "run-result.json").exists())
+            from unittest.mock import Mock
+            return Mock(pid=123)
+        with patch.object(router, "BASE", self.root), patch.object(router, "WORKSPACE", self.root), \
+             patch.object(router.subprocess, "Popen", side_effect=start):
+            self.router.launch(8, request)
+        self.assertEqual(self.router.state["jobs"]["8"]["transport"], "codex-queue")
+
     def test_close_requires_a_standalone_explicit_command(self):
         with patch.object(router, "api") as remote:
             self.router.handle(8, "普通留言，请继续回复", 1)

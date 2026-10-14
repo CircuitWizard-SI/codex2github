@@ -2,7 +2,15 @@
 
 ## 未发布
 
-暂无未发布改动。下一次对外发布的版本必须高于 `0.2.0`。
+暂无未发布改动。下一次对外发布的版本必须高于 `0.2.1`。
+
+## [0.2.1](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.1)
+
+- 已有会话仅通过 Codex Desktop 的原会话接口和官方队列执行；删除独立 app-server 接管回退，并拒绝独立执行器恢复已有会话。
+- 桌面端不可用时保留原留言等待重连，限制重试频率，同一消息只提示一次；不更改任何 Codex 或 CC Switch 全局配置。
+- 提交回执不明时保留日志边界核对结果，不自动重发；worker 意外退出也能从提交记录继续核对。
+- 重试前清理已确认未提交的旧等待结果，防止旧结果导致重复调度。新会话暂时保留现有创建方式。
+- Existing chats execute only through Desktop. Keep unsent requests pending during disconnection; reconcile uncertain submissions without replaying them. New-chat creation remains on the existing path.
 
 ## [0.2.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.2.0)
 

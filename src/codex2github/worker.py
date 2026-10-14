@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from .appserver_worker import (AppServer, run_turn, process_controls, queue_existing_thread,
-                               is_active_writer_error, is_queue_transport_error)
+                               is_active_writer_error, SettingsUnavailable, QueueSubmissionUncertain)
 from .config import SETTINGS, current_route_model, is_private_task_repository
 from .reasoning import normalize as normalize_effort, default_effort
 from .session_sync import BASE, api, redact, write_if_changed
@@ -44,20 +44,16 @@ def main(argv=None) -> int:
     if selected_effort == "auto":
         selected_effort = default_effort(SETTINGS.codex_home, execution_model)
     effort = "" if selected_effort == "auto" else selected_effort
-    result = {"sid": args.sid, "model": args.model, "effort": selected_effort, "ok": False, "replied": False, "transport": "appserver"}
+    result = {"sid": args.sid, "model": args.model, "effort": selected_effort, "ok": False, "replied": False,
+              "transport": "codex-queue" if args.sid else "appserver"}
     try:
         # Check before starting work, not only before posting its final response.
         if not is_private_task_repository(api(f"repos/{SETTINGS.repo}")):
             raise RuntimeError("Task repository must remain private and must not be a source template")
         prompt = args.prompt_file.read_text(encoding="utf-8-sig")
         if args.sid:
-            try:
-                result.update(queue_existing_thread(prompt, execution_model, args.cwd, args.sid, effort=effort))
-            except Exception as queue_error:
-                if not is_queue_transport_error(queue_error):
-                    raise
-                client = AppServer(directory)
-                result.update(run_turn(client, directory, prompt, execution_model, args.cwd, args.sid, effort))
+            result.update(queue_existing_thread(prompt, execution_model, args.cwd, args.sid,
+                                                effort=effort, directory=directory))
         else:
             client = AppServer(directory)
             result.update(run_turn(client, directory, prompt, execution_model, args.cwd, args.sid, effort))
@@ -65,7 +61,14 @@ def main(argv=None) -> int:
         runtime = directory / "runtime.json"
         if runtime.exists():
             result["sid"] = json.loads(runtime.read_text(encoding="utf-8")).get("sid", args.sid)
-        result.update(error=str(error), final="执行等待：" + str(error), retryable=is_active_writer_error(error))
+        if isinstance(error, QueueSubmissionUncertain):
+            result.update(error.receipt, error=str(error))
+        else:
+            desktop_wait = bool(args.sid and isinstance(error, SettingsUnavailable))
+            result.update(error=str(error), final="执行等待：" + str(error),
+                          retryable=desktop_wait or is_active_writer_error(error))
+            if desktop_wait:
+                result.update(retry_reason="desktop-unavailable", execution_complete=False)
     queued = bool(result.get("queued"))
     if queued:
         result["execution_complete"] = False
@@ -78,8 +81,10 @@ def main(argv=None) -> int:
             if queued:
                 if not is_private_task_repository(api(f"repos/{SETTINGS.repo}")):
                     raise RuntimeError("Task repository must remain private and must not be a source template")
+                receipt_text = (result["final"] if result.get("submission_uncertain") else
+                                f"已提交到本机原会话，模型 `{model}` · 思考档位 `{result.get('effort') or 'auto'}`。等待对应任务完成，完成后会在本 Issue 自动回复。")
                 response = api(f"repos/{SETTINGS.repo}/issues/{args.issue}/comments", "POST", {"body":
-                    f"<!-- codex2github:reply -->\n⏳ 已提交到本机原会话，模型 `{model}` · 思考档位 `{result.get('effort') or 'auto'}`。等待对应任务完成，完成后会在本 Issue 自动回复。"})
+                    "<!-- codex2github:reply -->\n⏳ " + receipt_text})
                 result.update(submission_replied=True, submission_reply_id=response.get("id"))
             else:
                 match = re.fullmatch(rf"{args.issue}-(\d+)", directory.name)

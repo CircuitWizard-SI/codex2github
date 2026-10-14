@@ -861,6 +861,10 @@ class Router:
                 # A crash between finishing the turn and publishing its receipt
                 # must not discard a result or replay the original task.
                 result = read_json(Path(job["directory"]) / "run-result.json", {})
+                if not result:
+                    attempt = read_json(Path(job["directory"]) / "submission-attempt.json", {})
+                    if attempt.get("queued"):
+                        result = attempt
             info = self.state["issues"][number]
             if result.get("queued"):
                 job["transport"] = "codex-queue"
@@ -891,8 +895,12 @@ class Router:
                     ]
                     notices = info.setdefault("runtime_notices", {})
                     if str(job["comment"]) not in notices:
-                        self.reply(int(number), "当前本机会话正在由 Codex 桌面端执行，这条远程留言已自动等待；桌面端释放会话后将继续执行。")
-                        notices[str(job["comment"])] = "thread-writer-busy"
+                        desktop_wait = result.get("retry_reason") == "desktop-unavailable"
+                        self.reply(int(number), "本机 Codex 桌面端暂时无法接收任务，原留言已保留并自动等待重连；不会切换到独立执行。" if desktop_wait else
+                                   "当前本机会话正在由 Codex 桌面端执行，这条远程留言已自动等待；桌面端释放会话后将继续执行。")
+                        notices[str(job["comment"])] = "desktop-unavailable" if desktop_wait else "thread-writer-busy"
+                    if result.get("retry_reason") == "desktop-unavailable":
+                        request["retry_after"] = time.time() + max(30, SETTINGS.poll_seconds)
                 else:
                     self.reply(int(number), "远程任务遇到本机会话写入冲突，且原留言未能恢复到队列；请重新发送原留言。")
             elif not result:
@@ -912,6 +920,12 @@ class Router:
         sid = request["sid"] or info.get("sid")
         directory = BASE / "jobs" / f"{number}-{request['comment']}"
         directory.mkdir(parents=True, exist_ok=True)
+        previous = read_json(directory / "completion.json", {}) or read_json(directory / "run-result.json", {})
+        if previous.get("retryable") and not previous.get("queued"):
+            # Reusing a request directory must not expose the previous wait
+            # result to reap() while its new submission worker is still alive.
+            for name in ("completion.json", "run-result.json", "final.md", "submission-attempt.json"):
+                (directory / name).unlink(missing_ok=True)
         cwd = self.records.get(sid, {}).get("cwd") or str(WORKSPACE)
         if not Path(cwd).is_dir():
             cwd = str(WORKSPACE)
@@ -926,7 +940,7 @@ class Router:
         with (directory / "worker.log").open("wb") as log:
             process = subprocess.Popen(arguments, cwd=WORKSPACE, stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         job = {"pid": process.pid, "sid": sid, "model": request["model"], "effort": request.get("effort") or self.current_effort(info), "directory": str(directory),
-               "comment": request["comment"], "request": request, "transport": "appserver"}
+               "comment": request["comment"], "request": request, "transport": "codex-queue" if sid else "appserver"}
         self.state["jobs"][str(number)] = job
         write_if_changed(BASE / f"running-issue-{number}.json", json.dumps(job))
         self.save()
@@ -1015,6 +1029,8 @@ class Router:
             if str(number) in self.state["jobs"] or not info["queue"]:
                 continue
             request = info["queue"][0]
+            if request.get("retry_after", 0) > time.time():
+                continue
             sid = request["sid"] or info.get("sid")
             if self.busy(int(number), sid):
                 continue

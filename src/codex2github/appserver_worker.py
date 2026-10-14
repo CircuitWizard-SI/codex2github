@@ -24,6 +24,13 @@ class RpcError(RuntimeError):
     pass
 
 
+class QueueSubmissionUncertain(RpcError):
+    """A queue send may have succeeded; only follow its original log, never retry."""
+    def __init__(self, message: str, receipt: dict):
+        super().__init__(message)
+        self.receipt = receipt
+
+
 def is_active_writer_error(error: BaseException | str) -> bool:
     """Identify a thread-store collision that is safe to retry later."""
     message = str(error).casefold()
@@ -187,7 +194,7 @@ def process_controls(client: AppServer, directory: Path, sid: str, turn_id: str,
         json_file(response_path, response)
 
 
-def queue_existing_thread(prompt: str, model: str, cwd: str, sid: str, timeout: float = 30, *, effort: str = "") -> dict:
+def queue_existing_thread(prompt: str, model: str, cwd: str, sid: str, timeout: float = 30, *, effort: str = "", directory: Path | None = None) -> dict:
     """Queue one message through Codex's existing local app-server session."""
     if not sid:
         raise RpcError("无法将没有会话 ID 的任务排入现有会话")
@@ -195,21 +202,40 @@ def queue_existing_thread(prompt: str, model: str, cwd: str, sid: str, timeout: 
     # thread. Confirm settings on its owner before submitting any task text.
     selected_effort = normalize_effort(effort) if effort else "auto"
     actual_settings = apply_existing_thread(sid, model, selected_effort, timeout=min(timeout, 10))
-    arguments = codex_command() + ["queue", "--thread", sid, "--message", prompt]
+    try:
+        arguments = codex_command() + ["queue", "--thread", sid, "--message", prompt]
+    except FileNotFoundError as error:
+        raise SettingsUnavailable("无法启动 Codex 队列客户端；原任务等待桌面端连接") from error
     if cwd and Path(cwd).is_dir():
         arguments += ["--cd", cwd]
     environment = codex_environment()
     boundary = submission_snapshot(SETTINGS.codex_home, sid)
+    attempt = {**boundary, "sid": sid, "model": actual_settings.get("model") or model,
+               "effort": actual_settings.get("reasoningEffort") or selected_effort,
+               "transport": "codex-queue", "queued": True, "ok": False,
+               "submission_uncertain": True, "execution_complete": False, "replied": False,
+               "final": "桌面端提交回执尚未确认，正在核对原会话；不会自动重发或切换执行路径。"}
+    if directory is not None:
+        json_file(directory / "submission-attempt.json", attempt)
     try:
         completed = subprocess.run(arguments, cwd=cwd if cwd and Path(cwd).is_dir() else None,
                                    env=environment, capture_output=True, text=True,
                                    encoding="utf-8", errors="replace", timeout=timeout,
                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise RpcError(str(error)) from error
+    except OSError as error:
+        if directory is not None:
+            json_file(directory / "submission-attempt.json", {**attempt, "queued": False})
+        raise SettingsUnavailable("Codex 队列客户端未启动；原任务等待桌面端连接") from error
+    except subprocess.TimeoutExpired as error:
+        raise QueueSubmissionUncertain("桌面端提交超时，送达状态未确认；未自动重发", attempt) from error
     if completed.returncode:
         detail = (completed.stderr or completed.stdout or "Codex queue failed").strip()
-        raise RpcError(detail)
+        # Only an explicit pre-delivery connection failure is safe to resend.
+        if any(marker in detail.casefold() for marker in ("connection refused", "failed to connect", "no-client-found")):
+            if directory is not None:
+                json_file(directory / "submission-attempt.json", {**attempt, "queued": False})
+            raise SettingsUnavailable("桌面端队列接口未连接；原任务保留等待重连")
+        raise QueueSubmissionUncertain("桌面端提交结果未确认：" + detail, attempt)
     receipt = (completed.stdout or "").strip()
     message_id = ""
     match = re.search(r"Queued message ([0-9a-f-]+)", receipt, re.I)
@@ -234,6 +260,8 @@ def read_route(client: AppServer, cwd: str) -> dict:
 
 def run_turn(client: AppServer, directory: Path, prompt: str, model: str, cwd: str,
              sid: str = "", effort: str = "", ephemeral: bool = False) -> dict:
+    if sid:
+        raise RpcError("Existing conversations must execute through Codex Desktop; independent resume is disabled")
     client.initialize()
     actual_effort = normalize_effort(effort) if effort else "auto"
     requested = model if model and model != "auto" else ""
@@ -343,9 +371,13 @@ def main(argv=None):
     client = None
     result = {"sid": args.sid, "ok": False, "transport": "appserver"}
     try:
-        client = AppServer(directory)
-        result = run_turn(client, directory, args.prompt_file.read_text(encoding="utf-8-sig"),
-                          args.model, args.cwd, args.sid)
+        if args.sid:
+            result = queue_existing_thread(args.prompt_file.read_text(encoding="utf-8-sig"),
+                                           args.model, args.cwd, args.sid, directory=directory)
+        else:
+            client = AppServer(directory)
+            result = run_turn(client, directory, args.prompt_file.read_text(encoding="utf-8-sig"),
+                              args.model, args.cwd)
     except Exception as error:
         runtime = directory / "runtime.json"
         if runtime.exists():

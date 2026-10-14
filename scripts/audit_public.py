@@ -6,10 +6,13 @@ import subprocess
 import zipfile
 import tarfile
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 BLOCKED = {".runtime", ".test-runtime", ".venv", "workspace", "vendor", "desktop-source", "protocol", "repository", "jobs", "sessions", "archived_sessions"}
 SECRET = re.compile(r"(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{20,})")
+PRIVATE_KEY = re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----")
+JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\b")
 PRIVATE_PATH = re.compile(r"(?:[A-Za-z]:[/\\]Users[/\\][^\s'\"<>]+|[A-Za-z]:[/\\]Wechat[/\\]xwechat_files[/\\]|\bwxid_[A-Za-z0-9_]+)", re.I)
 EMAIL = re.compile(r"\b[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
@@ -26,6 +29,8 @@ def inspect(name: str, raw: bytes) -> list[tuple[str, str]]:
     data = raw.decode("utf-8", errors="replace")
     if SECRET.search(data):
         findings.append((name, "credential-like literal"))
+    if PRIVATE_KEY.search(data) or JWT.search(data):
+        findings.append((name, "private key or authentication token candidate"))
     if PRIVATE_PATH.search(data):
         findings.append((name, "personal machine path or identifier"))
     if any(not anonymous_email(email) and email.rpartition("@")[2].lower() not in {"example.com", "example.invalid"}
@@ -69,6 +74,13 @@ def inspect_history() -> tuple[list[tuple[str, str]], int, int]:
 def main():
     files = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")[:-1]
     findings = []
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8")) if (ROOT / "pyproject.toml").is_file() else {}
+    if metadata:
+        namespace = ast.parse((ROOT / "src/codex2github/__init__.py").read_text(encoding="utf-8"))
+        version = next((ast.literal_eval(node.value) for node in namespace.body if isinstance(node, ast.Assign)
+                        and any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets)), None)
+        if version != metadata.get("project", {}).get("version"):
+            findings.append(("pyproject.toml", "package and module version mismatch"))
     for name in files:
         if not (ROOT / name).is_file():
             continue

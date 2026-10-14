@@ -1,5 +1,7 @@
 # codex2github
 
+当前发布版本：[0.1.0](https://github.com/CircuitWizard-SI/codex2github/releases/tag/v0.1.0)。使用 `codex2github --version` 查看已安装版本。
+
 把 GitHub Issue 当作本机 Codex 的远程会话入口。用手机浏览器继续已有会话、切换模型、引导正在执行的任务，或把下一条消息排队。
 
 这是供用户自行部署的裸项目模板：只包含通用源码、合成数据测试、示例配置、部署脚本和文档。下载或安装本身不会读取会话或上传历史；仓库不包含任何人的会话、运行配置、数据库、日志、任务结果或凭据。
@@ -122,6 +124,8 @@ gh repo create YOUR_USER/codex-tasks --private
 源码仓库不包含个人会话、截图、运行日志、凭据或逆向提取的桌面应用文件。历史脱敏是尽力处理，应使用仅授权自己访问的私有任务仓库；程序拒绝把会话历史发布到公开仓库。
 
 更多内容：[配置](docs/CONFIGURATION.md) · [架构](docs/ARCHITECTURE.md) · [路线图](docs/ROADMAP.md) · [贡献指南](CONTRIBUTING.md) · [安全说明](SECURITY.md)。
+
+每次发布项目更新时递增版本号，并同步更新包版本、更新记录与 GitHub 标签／Release；具体规则见 [版本发布](docs/RELEASING.md)。
 
 完整首次部署步骤和可交给 Codex 的部署说明见 [部署裸项目](docs/DEPLOYMENT.md)。
 

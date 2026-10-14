@@ -13,6 +13,8 @@ def main(argv=None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="codex2github")
+    from . import __version__
+    parser.add_argument("--version", action="version", version="%(prog)s " + __version__)
     parser.add_argument("--config", type=Path, help="Local JSON configuration; default: config.json")
     commands = parser.add_subparsers(dest="command", required=True)
     init = commands.add_parser("init", help="Write local configuration without changing Codex/GitHub")

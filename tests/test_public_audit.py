@@ -48,6 +48,27 @@ class PublicAuditTests(unittest.TestCase):
             self.assertIn("non-anonymous author or committer email", output.getvalue())
             self.assertNotIn(email, output.getvalue())
 
+    def test_private_key_and_jwt_candidates_are_detected_without_their_values(self):
+        key = "-----BEGIN " + "RSA PRIVATE KEY-----\n" + "synthetic data"
+        jwt = "eyJ" + "a" * 12 + "." + "b" * 12 + "." + "c" * 25
+        for value in (key, jwt):
+            findings = AUDIT.inspect("fixture.txt", value.encode())
+            self.assertTrue(any("private key or authentication token" in reason for _, reason in findings))
+            self.assertNotIn(value, str(findings))
+
+    def test_mismatched_package_and_module_versions_fail_the_release_audit(self):
+        with tempfile.TemporaryDirectory(dir=TEST_ROOT) as temporary:
+            root = Path(temporary)
+            self.run_git(root, "init", "-b", "main")
+            (root / "pyproject.toml").write_text('[project]\nversion = "0.1.1"\n', encoding="utf-8")
+            package = root / "src/codex2github"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text('__version__ = "0.1.0"\n', encoding="utf-8")
+            self.run_git(root, "add", ".")
+            with patch.object(AUDIT, "ROOT", root), patch.object(sys, "argv", ["audit_public.py"]), contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(AUDIT.main(), 1)
+            self.assertIn("package and module version mismatch", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

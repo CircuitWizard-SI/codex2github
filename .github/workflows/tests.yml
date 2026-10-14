@@ -24,7 +24,9 @@ jobs:
       - name: Run synthetic-data tests
         run: python -m unittest discover -s tests -v
       - name: Check command entry point
-        run: python -m codex2github --help
+        run: |
+          python -m codex2github --help
+          python -m codex2github --version
       - name: Check source and complete commit history
         run: python scripts/audit_public.py --history
       - name: Build wheel
